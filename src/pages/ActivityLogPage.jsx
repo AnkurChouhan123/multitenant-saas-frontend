@@ -1,37 +1,106 @@
-// frontend/src/pages/ActivityLogPage.jsx
+// frontend/src/pages/ActivityLogPage.jsx - FIXED WITH REAL DATA
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import activityService from '../services/activityService';
 
 const ActivityLogPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [activities, setActivities] = useState([]);
+  const [filteredActivities, setFilteredActivities] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock activity data - In production, fetch from API
-  const activities = [
-    { id: 1, user: 'Ankur Chouhan', action: 'Logged in', type: 'auth', timestamp: '2024-01-15 10:30:00', ip: '192.168.1.1', icon: '🔑', color: 'green' },
-    { id: 2, user: 'Ankur Chouhan', action: 'Created new user: John Doe', type: 'user', timestamp: '2024-01-15 10:35:00', ip: '192.168.1.1', icon: '👤', color: 'blue' },
-    { id: 3, user: 'Ankur Chouhan', action: 'Updated subscription plan to PRO', type: 'billing', timestamp: '2024-01-15 11:00:00', ip: '192.168.1.1', icon: '💳', color: 'purple' },
-    { id: 4, user: 'Ankur Chouhan', action: 'Changed company settings', type: 'settings', timestamp: '2024-01-15 11:15:00', ip: '192.168.1.1', icon: '⚙️', color: 'gray' },
-    { id: 5, user: 'Ankur Chouhan', action: 'Exported user data', type: 'data', timestamp: '2024-01-15 11:30:00', ip: '192.168.1.1', icon: '📥', color: 'yellow' },
-    { id: 6, user: 'John Doe', action: 'Logged in', type: 'auth', timestamp: '2024-01-15 12:00:00', ip: '192.168.1.5', icon: '🔑', color: 'green' },
-    { id: 7, user: 'Ankur Chouhan', action: 'Deleted user: Jane Smith', type: 'user', timestamp: '2024-01-15 13:00:00', ip: '192.168.1.1', icon: '🗑️', color: 'red' },
-    { id: 8, user: 'Ankur Chouhan', action: 'API key regenerated', type: 'security', timestamp: '2024-01-15 14:00:00', ip: '192.168.1.1', icon: '🔐', color: 'orange' },
-  ];
+  useEffect(() => {
+    fetchActivities();
+  }, []);
 
-  const filteredActivities = filter === 'all' 
-    ? activities 
-    : activities.filter(a => a.type === filter);
+  useEffect(() => {
+    applyFilter();
+  }, [filter, activities]);
+
+  const fetchActivities = async () => {
+    try {
+      setLoading(true);
+      const data = await activityService.getActivitiesByTenant(user.tenantId);
+      setActivities(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching activities:', err);
+      setError('Failed to load activities');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyFilter = () => {
+    if (filter === 'all') {
+      setFilteredActivities(activities);
+    } else {
+      setFilteredActivities(activities.filter(a => a.actionType === filter));
+    }
+  };
+
+  const getActivityIcon = (actionType) => {
+    const icons = {
+      auth: '🔑',
+      user: '👤',
+      billing: '💳',
+      settings: '⚙️',
+      data: '📥',
+      security: '🔐'
+    };
+    return icons[actionType] || '📝';
+  };
+
+  const getActivityColor = (actionType) => {
+    const colors = {
+      auth: 'green',
+      user: 'blue',
+      billing: 'purple',
+      settings: 'gray',
+      data: 'yellow',
+      security: 'orange'
+    };
+    return colors[actionType] || 'gray';
+  };
 
   const filterButtons = [
     { label: 'All', value: 'all', count: activities.length },
-    { label: 'Authentication', value: 'auth', count: activities.filter(a => a.type === 'auth').length },
-    { label: 'Users', value: 'user', count: activities.filter(a => a.type === 'user').length },
-    { label: 'Billing', value: 'billing', count: activities.filter(a => a.type === 'billing').length },
-    { label: 'Settings', value: 'settings', count: activities.filter(a => a.type === 'settings').length },
+    { label: 'Authentication', value: 'auth', count: activities.filter(a => a.actionType === 'auth').length },
+    { label: 'Users', value: 'user', count: activities.filter(a => a.actionType === 'user').length },
+    { label: 'Billing', value: 'billing', count: activities.filter(a => a.actionType === 'billing').length },
+    { label: 'Settings', value: 'settings', count: activities.filter(a => a.actionType === 'settings').length },
+    { label: 'Security', value: 'security', count: activities.filter(a => a.actionType === 'security').length },
   ];
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-primary-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-4 text-gray-600">Loading activity log...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,14 +118,23 @@ const ActivityLogPage = () => {
               <h1 className="text-3xl font-bold text-gray-900">Activity Log</h1>
               <p className="mt-1 text-sm text-gray-500">Track all actions in your workspace</p>
             </div>
-            <button className="px-4 py-2 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-medium hover:from-primary-600 hover:to-secondary-600 transition">
-              Export Log
+            <button 
+              onClick={fetchActivities}
+              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-medium hover:from-primary-600 hover:to-secondary-600 transition"
+            >
+              🔄 Refresh
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
           <div className="flex flex-wrap gap-2">
@@ -77,61 +155,59 @@ const ActivityLogPage = () => {
         </div>
 
         {/* Activity Timeline */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="divide-y divide-gray-200">
-            {filteredActivities.map((activity) => (
-              <div key={activity.id} className="p-6 hover:bg-gray-50 transition">
-                <div className="flex items-start space-x-4">
-                  {/* Icon */}
-                  <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-${activity.color}-100`}>
-                    <span className="text-2xl">{activity.icon}</span>
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-900">{activity.user}</p>
-                      <span className="text-xs text-gray-400">{activity.timestamp}</span>
+        {filteredActivities.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No activities yet</h3>
+            <p className="text-gray-500">Activity logs will appear here as users interact with the system</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="divide-y divide-gray-200">
+              {filteredActivities.map((activity) => (
+                <div key={activity.id} className="p-6 hover:bg-gray-50 transition">
+                  <div className="flex items-start space-x-4">
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-${getActivityColor(activity.actionType)}-100`}>
+                      <span className="text-2xl">{getActivityIcon(activity.actionType)}</span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-700">{activity.action}</p>
-                    <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                      <span className="flex items-center">
-                        <span className="mr-1">🌐</span>
-                        IP: {activity.ip}
-                      </span>
-                      <span className={`px-2 py-1 rounded-full bg-${activity.color}-100 text-${activity.color}-800 font-medium`}>
-                        {activity.type}
-                      </span>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-900">{activity.userName}</p>
+                        <span className="text-xs text-gray-400">{formatDate(activity.createdAt)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-700">{activity.action}</p>
+                      <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+                        <span className="flex items-center">
+                          <span className="mr-1">🌐</span>
+                          IP: {activity.ipAddress || 'N/A'}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full bg-${getActivityColor(activity.actionType)}-100 text-${getActivityColor(activity.actionType)}-800 font-medium`}>
+                          {activity.actionType}
+                        </span>
+                      </div>
+                      {activity.details && (
+                        <p className="mt-2 text-xs text-gray-500 italic">{activity.details}</p>
+                      )}
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <button className="text-gray-400 hover:text-gray-600 transition">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Pagination */}
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing <span className="font-medium">{filteredActivities.length}</span> of{' '}
-            <span className="font-medium">{activities.length}</span> activities
-          </p>
-          <div className="flex space-x-2">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-              Previous
-            </button>
-            <button className="px-4 py-2 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg text-sm font-medium hover:from-primary-600 hover:to-secondary-600 transition">
-              Next
-            </button>
+        {/* Pagination Info */}
+        {filteredActivities.length > 0 && (
+          <div className="mt-6 flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing <span className="font-medium">{filteredActivities.length}</span> of{' '}
+              <span className="font-medium">{activities.length}</span> activities
+            </p>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
