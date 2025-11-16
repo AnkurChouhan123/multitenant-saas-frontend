@@ -1,4 +1,4 @@
-// frontend/src/pages/DashboardPage.jsx
+// frontend/src/pages/DashboardPage.jsx - ENHANCED VERSION
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +22,6 @@ const DashboardPage = () => {
       const usersData = await userService.getUsersByTenant(user.tenantId);
       setUsers(usersData);
       
-      // Try to get subscription, use default if not found
       try {
         const subData = await subscriptionService.getSubscription(user.tenantId);
         setSubscription(subData);
@@ -71,19 +70,13 @@ const DashboardPage = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/settings')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
               >
                 ⚙️ Settings
               </button>
               <button
-                onClick={() => navigate('/users')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition"
-              >
-                Manage Users
-              </button>
-              <button
                 onClick={logout}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition"
               >
                 Logout
               </button>
@@ -93,10 +86,51 @@ const DashboardPage = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => navigate('/users')}
+              className="p-4 bg-white rounded-lg shadow hover:shadow-lg transition text-left"
+            >
+              <div className="text-3xl mb-2">👥</div>
+              <div className="font-medium text-gray-900">Manage Users</div>
+              <div className="text-sm text-gray-500">Add or edit team members</div>
+            </button>
+            
+            <button
+              onClick={() => navigate('/subscription')}
+              className="p-4 bg-white rounded-lg shadow hover:shadow-lg transition text-left"
+            >
+              <div className="text-3xl mb-2">💳</div>
+              <div className="font-medium text-gray-900">Subscription</div>
+              <div className="text-sm text-gray-500">Manage your plan</div>
+            </button>
+            
+            <button
+              onClick={() => navigate('/analytics')}
+              className="p-4 bg-white rounded-lg shadow hover:shadow-lg transition text-left"
+            >
+              <div className="text-3xl mb-2">📊</div>
+              <div className="font-medium text-gray-900">Analytics</div>
+              <div className="text-sm text-gray-500">View insights</div>
+            </button>
+            
+            <button
+              onClick={() => navigate('/activity')}
+              className="p-4 bg-white rounded-lg shadow hover:shadow-lg transition text-left"
+            >
+              <div className="text-3xl mb-2">📋</div>
+              <div className="font-medium text-gray-900">Activity Log</div>
+              <div className="text-sm text-gray-500">Track all actions</div>
+            </button>
+          </div>
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          {/* Company Card */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition">
             <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-primary-100 rounded-lg p-3">
@@ -104,20 +138,15 @@ const DashboardPage = () => {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Company
-                    </dt>
-                    <dd className="text-lg font-semibold text-gray-900">
-                      {user.tenantName}
-                    </dd>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Company</dt>
+                    <dd className="text-lg font-semibold text-gray-900">{user.tenantName}</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Plan Card */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition">
             <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-green-100 rounded-lg p-3">
@@ -125,20 +154,15 @@ const DashboardPage = () => {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Current Plan
-                    </dt>
-                    <dd className="text-lg font-semibold text-gray-900">
-                      {subscription?.plan || 'FREE'}
-                    </dd>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Current Plan</dt>
+                    <dd className="text-lg font-semibold text-gray-900">{subscription?.plan || 'FREE'}</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Users Card */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition">
             <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-blue-100 rounded-lg p-3">
@@ -146,20 +170,15 @@ const DashboardPage = () => {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Total Users
-                    </dt>
-                    <dd className="text-lg font-semibold text-gray-900">
-                      {users.length}
-                    </dd>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Users</dt>
+                    <dd className="text-lg font-semibold text-gray-900">{users.length}</dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* API Calls Card */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+          <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition">
             <div className="p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-purple-100 rounded-lg p-3">
@@ -167,12 +186,8 @@ const DashboardPage = () => {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      API Calls
-                    </dt>
-                    <dd className="text-lg font-semibold text-gray-900">
-                      {subscription?.currentApiCalls || 0}
-                    </dd>
+                    <dt className="text-sm font-medium text-gray-500 truncate">API Calls</dt>
+                    <dd className="text-lg font-semibold text-gray-900">{subscription?.currentApiCalls || 0}</dd>
                   </dl>
                 </div>
               </div>
@@ -183,24 +198,18 @@ const DashboardPage = () => {
         {/* Subscription Details */}
         <div className="bg-white shadow-lg rounded-lg overflow-hidden mb-8">
           <div className="px-6 py-5 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">
-              Subscription Details
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900">Subscription Details</h3>
           </div>
           <div className="px-6 py-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <p className="text-sm font-medium text-gray-500">Plan</p>
-                <p className="mt-1 text-xl font-semibold text-gray-900">
-                  {subscription?.plan}
-                </p>
+                <p className="mt-1 text-xl font-semibold text-gray-900">{subscription?.plan}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-500">Status</p>
                 <span className={`mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  subscription?.isActive 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                  subscription?.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 }`}>
                   {subscription?.isActive ? '✓ Active' : '✗ Inactive'}
                 </span>
@@ -219,43 +228,40 @@ const DashboardPage = () => {
               </div>
             </div>
             <div className="mt-6">
-              <a 
-                href="/subscription"
-                className="inline-block w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-medium hover:from-primary-600 hover:to-secondary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition transform hover:scale-105 text-center">
+              <button
+                onClick={() => navigate('/subscription')}
+                className="inline-block w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-medium hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 text-center"
+              >
                 Upgrade Plan
-              </a>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Users Table */}
         <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">
-              Team Members
-            </h3>
+          <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">Team Members</h3>
+            <button
+              onClick={() => navigate('/users')}
+              className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm"
+            >
+              Manage Users
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={user.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {user.firstName} {user.lastName}
@@ -271,9 +277,7 @@ const DashboardPage = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                        user.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
                         {user.active ? 'Active' : 'Inactive'}
                       </span>
