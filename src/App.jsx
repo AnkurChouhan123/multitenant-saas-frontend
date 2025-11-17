@@ -12,6 +12,8 @@ import SubscriptionPage from './pages/SubscriptionPage';
 import SettingsPage from './pages/SettingsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
+import ApiKeysPage from './pages/ApiKeysPage';
+import WebhooksPage from './pages/Webhookspage';
 
 function App() {
   return (
@@ -75,6 +77,24 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ActivityLogPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/api-keys"
+              element={
+                <ProtectedRoute>
+                  <ApiKeysPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/Webhooks"
+              element={
+                <ProtectedRoute>
+                  <WebhooksPage />
                 </ProtectedRoute>
               }
             />
