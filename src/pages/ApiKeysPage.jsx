@@ -1,4 +1,4 @@
-
+// frontend/src/pages/ApiKeysPage.jsx - FIXED
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +14,7 @@ const ApiKeysPage = () => {
   const [apiKeys, setApiKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     scopes: 'read,write',
@@ -27,11 +28,30 @@ const ApiKeysPage = () => {
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('🔑 Fetching API keys for tenant:', user.tenantId);
+      console.log('📤 User role:', user.role);
+      console.log('📤 Token exists:', !!localStorage.getItem('token'));
+      
       const data = await apiKeyService.getApiKeysByTenant(user.tenantId);
+      
+      console.log('✅ API keys fetched:', data.length);
       setApiKeys(data);
     } catch (error) {
-      console.error('Error fetching API keys:', error);
-      addToast('Failed to load API keys', 'error');
+      console.error('❌ Error fetching API keys:', error);
+      console.error('❌ Error response:', error.response);
+      
+      if (error.response?.status === 403) {
+        setError('Access denied. Only admins can manage API keys.');
+        addToast('Access denied. Admin role required.', 'error');
+      } else if (error.response?.status === 401) {
+        setError('Unauthorized. Please login again.');
+        addToast('Session expired. Please login again.', 'error');
+      } else {
+        setError('Failed to load API keys: ' + (error.response?.data?.message || error.message));
+        addToast('Failed to load API keys', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -40,17 +60,25 @@ const ApiKeysPage = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
+      console.log('➕ Creating API key:', formData);
+      
       await apiKeyService.createApiKey(user.tenantId, {
         userId: user.userId,
         ...formData
       });
+      
       addToast('API Key created successfully!', 'success');
       setShowModal(false);
       setFormData({ name: '', scopes: 'read,write', expiresInDays: 365 });
       fetchApiKeys();
     } catch (error) {
-      console.error('Error creating API key:', error);
-      addToast('Failed to create API key', 'error');
+      console.error('❌ Error creating API key:', error);
+      
+      if (error.response?.status === 403) {
+        addToast('Access denied. Admin role required.', 'error');
+      } else {
+        addToast('Failed to create API key: ' + (error.response?.data?.message || error.message), 'error');
+      }
     }
   };
 
@@ -62,6 +90,7 @@ const ApiKeysPage = () => {
       addToast('API Key revoked', 'success');
       fetchApiKeys();
     } catch (error) {
+      console.error('❌ Error revoking:', error);
       addToast('Failed to revoke API key', 'error');
     }
   };
@@ -74,6 +103,7 @@ const ApiKeysPage = () => {
       addToast('API Key deleted', 'success');
       fetchApiKeys();
     } catch (error) {
+      console.error('❌ Error deleting:', error);
       addToast('Failed to delete API key', 'error');
     }
   };
@@ -86,7 +116,54 @@ const ApiKeysPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin h-12 w-12 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-primary-500 border-t-transparent rounded-full mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading API keys...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if access denied
+  if (error && (error.includes('Access denied') || error.includes('Unauthorized'))) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-500 hover:text-gray-700 mb-2">
+              ← Back to Dashboard
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">API Keys</h1>
+          </div>
+        </header>
+        
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-yellow-800">Access Restricted</h3>
+                <p className="mt-2 text-sm text-yellow-700">{error}</p>
+                <p className="mt-2 text-sm text-yellow-700">
+                  Your current role: <strong>{user.role}</strong>
+                </p>
+                <p className="mt-2 text-sm text-yellow-700">
+                  Required role: <strong>TENANT_ADMIN or SUPER_ADMIN</strong>
+                </p>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -114,9 +191,23 @@ const ApiKeysPage = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && !error.includes('Access denied') && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+            <p className="text-red-700">{error}</p>
+            <button
+              onClick={fetchApiKeys}
+              className="mt-2 text-sm text-red-700 underline hover:text-red-800"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
         {apiKeys.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-12 text-center">
+            <div className="text-6xl mb-4">🔑</div>
             <p className="text-gray-500 mb-4">No API keys yet</p>
+            <p className="text-sm text-gray-400 mb-6">Create your first API key to integrate with external services</p>
             <button
               onClick={() => setShowModal(true)}
               className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -207,21 +298,22 @@ const ApiKeysPage = () => {
             <form onSubmit={handleCreate}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Name</label>
+                  <label className="block text-sm font-medium mb-1">Name *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                    placeholder="Production API Key"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Scopes</label>
+                  <label className="block text-sm font-medium mb-1">Scopes *</label>
                   <select
                     value={formData.scopes}
                     onChange={(e) => setFormData({...formData, scopes: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="read">Read Only</option>
                     <option value="read,write">Read & Write</option>
@@ -234,16 +326,20 @@ const ApiKeysPage = () => {
                     type="number"
                     value={formData.expiresInDays}
                     onChange={(e) => setFormData({...formData, expiresInDays: parseInt(e.target.value)})}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                     min="1"
                     max="3650"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Leave as 365 for 1 year expiration</p>
                 </div>
               </div>
               <div className="flex justify-end space-x-2 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setFormData({ name: '', scopes: 'read,write', expiresInDays: 365 });
+                  }}
                   className="px-4 py-2 border rounded-lg hover:bg-gray-50"
                 >
                   Cancel
@@ -252,7 +348,7 @@ const ApiKeysPage = () => {
                   type="submit"
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                 >
-                  Create
+                  Create Key
                 </button>
               </div>
             </form>
