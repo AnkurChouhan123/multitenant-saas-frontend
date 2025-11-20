@@ -54,17 +54,23 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const login = async (email, password) => {
-    try {
-      const response = await authService.login(email, password);
-      console.log('✅ Login successful:', response);
-      setUser(response);
-      return response;
-    } catch (error) {
-      console.error('❌ Login failed:', error);
-      throw error;
-    }
-  };
+ const login = async (email, password) => {
+  const user = await authService.login(email, password);
+
+  // store fields individually
+  localStorage.setItem("token", user.token);
+  localStorage.setItem("userId", user.userId);
+  localStorage.setItem("email", user.email);
+  localStorage.setItem("firstName", user.firstName);
+  localStorage.setItem("lastName", user.lastName);
+  localStorage.setItem("role", user.role);
+  localStorage.setItem("tenantId", user.tenantId);
+  localStorage.setItem("tenantName", user.tenantName || "");
+
+  setUser(user);
+  return user;
+};
+
 
   const register = async (formData) => {
     try {
