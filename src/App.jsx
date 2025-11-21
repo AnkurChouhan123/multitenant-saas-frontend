@@ -1,19 +1,55 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './components/common/Toast';
-import ProtectedRoute from './components/auth/ProtectedRoute';
+// frontend/src/App.jsx - ENHANCED VERSION
 
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import UsersPage from './pages/UsersPage';
-import SubscriptionPage from './pages/SubscriptionPage';
-import SettingsPage from './pages/SettingsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import ActivityLogPage from './pages/ActivityLogPage';
-import ApiKeysPage from './pages/ApiKeysPage';
-import WebhooksPage from './pages/Webhookspage';
+import React from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./components/common/Toast";
+
+// Import Layout
+import MainLayout from "./components/layout/MainLayout";
+
+// Import Pages
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import DashboardPage from "./pages/DashboardPage";
+import UsersPage from "./pages/UsersPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
+import SettingsPage from "./pages/SettingsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import ActivityLogPage from "./pages/ActivityLogPage";
+import ApiKeysPage from "./pages/ApiKeysPage";
+import WebhooksPage from "./pages/Webhookspage";
+// Protected Route Wrapper
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <MainLayout
+      user={user}
+      logout={() => {
+        localStorage.clear();
+        window.location.href = "/login";
+      }}
+      navigate={navigate}
+      location={location}
+    >
+      {children}
+    </MainLayout>
+  );
+};
 
 function App() {
   return (
@@ -21,7 +57,6 @@ function App() {
       <AuthProvider>
         <ToastProvider>
           <Routes>
-
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
@@ -91,7 +126,7 @@ function App() {
             />
 
             <Route
-              path="/Webhooks"
+              path="/webhooks"
               element={
                 <ProtectedRoute>
                   <WebhooksPage />
@@ -104,7 +139,6 @@ function App() {
 
             {/* 404 → login */}
             <Route path="*" element={<Navigate to="/login" replace />} />
-
           </Routes>
         </ToastProvider>
       </AuthProvider>
