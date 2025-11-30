@@ -11,6 +11,7 @@ export { default as analyticsService } from './analyticsService';
 export { default as apiKeyService } from './apiKeyService';
 export { default as webhookService } from './webhookService';
 export { default as tenantService } from './tenantService';
+export { default as fileStorageService } from './fileStorageService';
 
 // Export utility functions
 export * from '../utils/utils';

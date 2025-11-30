@@ -1,4 +1,4 @@
-// src/utils/exportUtils.js
+// src/utils/exportUtils.js - FIXED VERSION (Pure Utilities Only)
 
 /**
  * Export data to CSV format
@@ -177,86 +177,72 @@ const downloadBlob = (blob, filename) => {
 };
 
 /**
- * Export Component - Provides UI for export options
+ * Quick export function - exports to CSV by default
  */
-import React, { useState } from 'react';
+export const quickExport = (data, filename = 'export', format = 'csv') => {
+  switch (format.toLowerCase()) {
+    case 'csv':
+      exportToCSV(data, `${filename}.csv`);
+      break;
+    case 'excel':
+    case 'xlsx':
+      exportToExcel(data, `${filename}.xlsx`);
+      break;
+    case 'json':
+      exportToJSON(data, `${filename}.json`);
+      break;
+    case 'pdf':
+      exportTableToPDF(data, `${filename}.pdf`, filename);
+      break;
+    default:
+      console.warn('Unknown format, defaulting to CSV');
+      exportToCSV(data, `${filename}.csv`);
+  }
+};
 
-export const ExportButton = ({ data, filename = 'export', columns = null }) => {
-  const [showMenu, setShowMenu] = useState(false);
-
-  const handleExport = (format) => {
-    switch (format) {
-      case 'csv':
-        exportToCSV(data, `${filename}.csv`, columns);
-        break;
-      case 'excel':
-        exportToExcel(data, `${filename}.xlsx`, columns);
-        break;
-      case 'json':
-        exportToJSON(data, `${filename}.json`);
-        break;
-      case 'pdf':
-        exportTableToPDF(data, `${filename}.pdf`, filename);
-        break;
-      default:
-        console.warn('Unknown export format');
+/**
+ * Format data for export (handles nested objects)
+ */
+export const formatDataForExport = (data) => {
+  return data.map(item => {
+    const formatted = {};
+    for (const key in item) {
+      if (typeof item[key] === 'object' && item[key] !== null) {
+        formatted[key] = JSON.stringify(item[key]);
+      } else {
+        formatted[key] = item[key];
+      }
     }
-    setShowMenu(false);
-  };
+    return formatted;
+  });
+};
 
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setShowMenu(!showMenu)}
-        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-      >
-        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Export
-        <svg className={`w-4 h-4 ml-2 transition-transform ${showMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+/**
+ * Export with progress callback
+ */
+export const exportWithProgress = async (data, filename, format, onProgress) => {
+  const totalRows = data.length;
+  const chunkSize = 100;
+  let processedRows = 0;
 
-      {showMenu && (
-        <>
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setShowMenu(false)}
-          />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
-            <button
-              onClick={() => handleExport('csv')}
-              className="w-full flex items-center px-4 py-3 hover:bg-gray-50 transition"
-            >
-              <span className="text-2xl mr-3">📊</span>
-              <span className="text-gray-900">Export as CSV</span>
-            </button>
-            <button
-              onClick={() => handleExport('excel')}
-              className="w-full flex items-center px-4 py-3 hover:bg-gray-50 transition"
-            >
-              <span className="text-2xl mr-3">📗</span>
-              <span className="text-gray-900">Export as Excel</span>
-            </button>
-            <button
-              onClick={() => handleExport('json')}
-              className="w-full flex items-center px-4 py-3 hover:bg-gray-50 transition"
-            >
-              <span className="text-2xl mr-3">🔧</span>
-              <span className="text-gray-900">Export as JSON</span>
-            </button>
-            <button
-              onClick={() => handleExport('pdf')}
-              className="w-full flex items-center px-4 py-3 hover:bg-gray-50 transition"
-            >
-              <span className="text-2xl mr-3">📄</span>
-              <span className="text-gray-900">Export as PDF</span>
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
+  const chunks = [];
+  for (let i = 0; i < data.length; i += chunkSize) {
+    chunks.push(data.slice(i, i + chunkSize));
+  }
+
+  for (const chunk of chunks) {
+    processedRows += chunk.length;
+    if (onProgress) {
+      onProgress(Math.round((processedRows / totalRows) * 100));
+    }
+    // Small delay to allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  // Now do the actual export
+  quickExport(data, filename, format);
+  
+  if (onProgress) {
+    onProgress(100);
+  }
 };

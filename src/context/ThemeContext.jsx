@@ -1,4 +1,4 @@
-// src/context/ThemeContext.jsx
+// src/context/ThemeContext.jsx - FIXED FOR GLOBAL DARK MODE
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
@@ -19,7 +19,7 @@ export const ThemeProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    // Apply theme to document
+    // Apply theme to document root
     const root = document.documentElement;
     
     if (theme === 'dark') {
@@ -70,7 +70,7 @@ export const ThemeToggle = () => {
     >
       {theme === 'light' ? (
         // Moon icon for dark mode
-        <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
         </svg>
       ) : (
@@ -83,22 +83,14 @@ export const ThemeToggle = () => {
   );
 };
 
-// Update tailwind.config.js to enable dark mode
-// Add this to your tailwind config:
-/*
-module.exports = {
-  darkMode: 'class', // Enable class-based dark mode
-  // ... rest of config
-}
-*/
-
-// Dark mode utility classes
+// Dark mode utility classes for use throughout the app
 export const darkModeClasses = {
   // Backgrounds
   bg: {
     primary: 'bg-white dark:bg-gray-900',
     secondary: 'bg-gray-50 dark:bg-gray-800',
     tertiary: 'bg-gray-100 dark:bg-gray-700',
+    hover: 'hover:bg-gray-50 dark:hover:bg-gray-800',
   },
   
   // Text
@@ -112,30 +104,21 @@ export const darkModeClasses = {
   border: {
     default: 'border-gray-200 dark:border-gray-700',
     light: 'border-gray-100 dark:border-gray-800',
-  },
-  
-  // Hover states
-  hover: {
-    bg: 'hover:bg-gray-50 dark:hover:bg-gray-800',
+    hover: 'hover:border-gray-300 dark:hover:border-gray-600',
   },
   
   // Cards
   card: 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+  
+  // Inputs
+  input: 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
+  
+  // Buttons
+  button: {
+    primary: 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600',
+    secondary: 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600',
+  },
 };
-
-// Example usage in components:
-/*
-import { darkModeClasses } from '../context/ThemeContext';
-
-const MyComponent = () => {
-  return (
-    <div className={darkModeClasses.bg.primary}>
-      <h1 className={darkModeClasses.text.primary}>Hello World</h1>
-      <p className={darkModeClasses.text.secondary}>This is a paragraph</p>
-    </div>
-  );
-};
-*/
 
 // Updated color palette for dark mode
 export const themeColors = {
@@ -145,6 +128,7 @@ export const themeColors = {
     background: '#ffffff',
     surface: '#f7fafc',
     text: '#1a202c',
+    border: '#e2e8f0',
   },
   dark: {
     primary: '#818cf8',
@@ -152,5 +136,6 @@ export const themeColors = {
     background: '#111827',
     surface: '#1f2937',
     text: '#f9fafb',
+    border: '#374151',
   }
 };

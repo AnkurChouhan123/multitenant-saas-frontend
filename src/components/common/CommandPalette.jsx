@@ -1,4 +1,4 @@
-// src/components/common/CommandPalette.jsx
+// src/components/common/CommandPalette.jsx - FIXED WITH AUTO-SCROLL
 
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -7,6 +7,8 @@ const CommandPalette = ({ navigate, user }) => {
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const itemRefs = useRef([]);
 
   const commands = [
     // Navigation
@@ -50,6 +52,28 @@ const CommandPalette = ({ navigate, user }) => {
     return acc;
   }, {});
 
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (isOpen && itemRefs.current[selectedIndex]) {
+      const selectedElement = itemRefs.current[selectedIndex];
+      const container = listRef.current;
+      
+      if (selectedElement && container) {
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = selectedElement.getBoundingClientRect();
+        
+        // Check if element is out of view
+        if (elementRect.bottom > containerRect.bottom) {
+          // Scroll down
+          selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else if (elementRect.top < containerRect.top) {
+          // Scroll up
+          selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    }
+  }, [selectedIndex, isOpen]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Cmd+K or Ctrl+K to open
@@ -62,6 +86,7 @@ const CommandPalette = ({ navigate, user }) => {
       if (e.key === 'Escape') {
         setIsOpen(false);
         setSearch('');
+        setSelectedIndex(0);
       }
 
       // Arrow navigation
@@ -97,6 +122,11 @@ const CommandPalette = ({ navigate, user }) => {
     }
   }, [isOpen]);
 
+  // Reset selected index when search changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [search]);
+
   const executeCommand = (command) => {
     command.action();
     setIsOpen(false);
@@ -111,43 +141,51 @@ const CommandPalette = ({ navigate, user }) => {
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={() => setIsOpen(false)}
+        onClick={() => {
+          setIsOpen(false);
+          setSearch('');
+          setSelectedIndex(0);
+        }}
       />
 
       {/* Command Palette */}
       <div className="flex items-start justify-center min-h-screen pt-16 px-4">
-        <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden">
+        <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden">
           {/* Search Input */}
-          <div className="flex items-center px-4 py-3 border-b border-gray-200">
-            <svg className="w-5 h-5 text-gray-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <svg className="w-5 h-5 text-gray-400 dark:text-gray-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               ref={inputRef}
               type="text"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setSelectedIndex(0);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Type a command or search..."
-              className="flex-1 outline-none text-gray-900 placeholder-gray-400"
+              className="flex-1 outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 bg-transparent"
             />
-            <kbd className="px-2 py-1 text-xs bg-gray-100 border border-gray-300 rounded">
+            <kbd className="hidden sm:inline-block px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-400">
               ESC
             </kbd>
           </div>
 
-          {/* Commands List */}
-          <div className="max-h-96 overflow-y-auto">
+          {/* Commands List - Fixed Height with Scroll */}
+          <div 
+            ref={listRef}
+            className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+          >
             {Object.keys(groupedCommands).length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-500">
-                <p>No commands found</p>
+              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <svg className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm">No commands found</p>
+                <p className="text-xs mt-1">Try a different search term</p>
               </div>
             ) : (
               Object.entries(groupedCommands).map(([category, cmds]) => (
                 <div key={category}>
-                  <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase bg-gray-50">
+                  <div className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
                     {category}
                   </div>
                   {cmds.map((command, idx) => {
@@ -155,16 +193,21 @@ const CommandPalette = ({ navigate, user }) => {
                     return (
                       <button
                         key={command.id}
+                        ref={el => itemRefs.current[globalIndex] = el}
                         onClick={() => executeCommand(command)}
                         onMouseEnter={() => setSelectedIndex(globalIndex)}
-                        className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 transition ${
-                          selectedIndex === globalIndex ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+                        className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition ${
+                          selectedIndex === globalIndex 
+                            ? 'bg-blue-50 dark:bg-blue-900/30 border-l-2 border-blue-500' 
+                            : ''
                         }`}
                       >
                         <span className="text-2xl mr-3">{command.icon}</span>
-                        <span className="flex-1 text-left text-gray-900">{command.name}</span>
+                        <span className="flex-1 text-left text-gray-900 dark:text-gray-100 text-sm">
+                          {command.name}
+                        </span>
                         {selectedIndex === globalIndex && (
-                          <kbd className="px-2 py-1 text-xs bg-gray-100 border border-gray-300 rounded">
+                          <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-400">
                             ↵
                           </kbd>
                         )}
@@ -177,23 +220,25 @@ const CommandPalette = ({ navigate, user }) => {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+          <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <div className="flex items-center space-x-4">
               <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded mr-1">↑</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded mr-1">↓</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded mr-1">↑</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded mr-1">↓</kbd>
                 Navigate
               </span>
               <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded mr-1">↵</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded mr-1">↵</kbd>
                 Select
               </span>
               <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded mr-1">ESC</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded mr-1">ESC</kbd>
                 Close
               </span>
             </div>
-            <span>{filteredCommands.length} results</span>
+            <span className="hidden sm:inline">
+              {filteredCommands.length} result{filteredCommands.length !== 1 ? 's' : ''}
+            </span>
           </div>
         </div>
       </div>
