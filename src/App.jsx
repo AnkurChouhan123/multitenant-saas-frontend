@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FIXED TO USE AUTH CONTEXT INSIDE MAINLAYOUT
+// frontend/src/App.jsx - CLEANED VERSION
 
 import React from "react";
 import {
@@ -18,9 +18,13 @@ import CommandPalette from "./components/common/CommandPalette";
 // Layout
 import MainLayout from "./components/layout/MainLayout";
 
-// Pages
+// Auth Pages
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+
+// Protected Pages
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
@@ -28,11 +32,8 @@ import SettingsPage from "./pages/SettingsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import ApiKeysPage from "./pages/ApiKeysPage";
-import WebhooksPage from "./pages/Webhookspage";
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
+import WebhooksPage from "./pages/WebhooksPage";
+import FileManagerPage from "./pages/FileManagerPage";
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -45,11 +46,9 @@ const ProtectedRoute = ({ children }) => {
 
   return (
     <>
-      {/* MAIN LAYOUT NOW USES AUTH CONTEXT DIRECTLY */}
       <MainLayout navigate={navigate} location={location}>
         {children}
       </MainLayout>
-
       <CommandPalette navigate={navigate} />
     </>
   );
@@ -63,16 +62,13 @@ function App() {
           <AuthProvider>
             <ToastProvider>
               <Routes>
-                {/* Public */}
+                {/* Public Routes */}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                {/* Public Routes */}
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Protected */}
+                {/* Protected Routes */}
                 <Route
                   path="/dashboard"
                   element={
@@ -145,11 +141,17 @@ function App() {
                   }
                 />
 
-                {/* Default */}
                 <Route
-                  path="/"
-                  element={<Navigate to="/dashboard" replace />}
+                  path="/files"
+                  element={
+                    <ProtectedRoute>
+                      <FileManagerPage />
+                    </ProtectedRoute>
+                  }
                 />
+
+                {/* Default Routes */}
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
               </Routes>
             </ToastProvider>
