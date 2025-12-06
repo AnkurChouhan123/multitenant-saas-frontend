@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - CLEANED VERSION
+// frontend/src/App.jsx - SUPER ADMIN ENABLED VERSION
 
 import React from "react";
 import {
@@ -9,6 +9,7 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
+
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./components/common/Toast";
@@ -17,6 +18,8 @@ import CommandPalette from "./components/common/CommandPalette";
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
+import SuperAdminDashboard from "./pages/superadmin/SuperAdminDashboard";
+import TenantsPage from "./pages/superadmin/TenantsPage";
 
 // Auth Pages
 import LoginPage from "./pages/LoginPage";
@@ -24,7 +27,7 @@ import RegisterPage from "./pages/RegisterPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
-// Protected Pages
+// Protected Tenant Pages
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
@@ -35,6 +38,9 @@ import ApiKeysPage from "./pages/ApiKeysPage";
 import WebhooksPage from "./pages/WebhooksPage";
 import FileManagerPage from "./pages/FileManagerPage";
 
+// ==========================================================
+// 🔐 PROTECTED ROUTES FOR TENANT USERS
+// ==========================================================
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +60,26 @@ const ProtectedRoute = ({ children }) => {
   );
 };
 
+// ==========================================================
+// 🔐 SUPER ADMIN PROTECTED ROUTE
+// ==========================================================
+const SuperAdminRoute = ({ children }) => {
+  const { isAuthenticated, user } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "SUPER_ADMIN") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// ==========================================================
+// MAIN APP
+// ==========================================================
 function App() {
   return (
     <AppErrorBoundary>
@@ -62,13 +88,37 @@ function App() {
           <AuthProvider>
             <ToastProvider>
               <Routes>
-                {/* Public Routes */}
+
+                {/* PUBLIC ROUTES */}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Protected Routes */}
+                {/* ================================
+                     SUPER ADMIN ROUTES 
+                   ================================ */}
+                <Route
+                  path="/superadmin/dashboard"
+                  element={
+                    <SuperAdminRoute>
+                      <SuperAdminDashboard />
+                    </SuperAdminRoute>
+                  }
+                />
+
+                <Route
+                  path="/superadmin/tenants"
+                  element={
+                    <SuperAdminRoute>
+                      <TenantsPage />
+                    </SuperAdminRoute>
+                  }
+                />
+
+                {/* ================================
+                     TENANT PROTECTED ROUTES 
+                   ================================ */}
                 <Route
                   path="/dashboard"
                   element={
@@ -150,9 +200,10 @@ function App() {
                   }
                 />
 
-                {/* Default Routes */}
+                {/* DEFAULT ROUTES */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
+
               </Routes>
             </ToastProvider>
           </AuthProvider>

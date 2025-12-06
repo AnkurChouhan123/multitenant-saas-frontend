@@ -380,16 +380,22 @@ const SettingsPage = () => {
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Company Settings</h2>
                   <p className="text-gray-600 dark:text-gray-400 mb-6">Manage your company information</p>
                   <form onSubmit={handleCompanySave} className="space-y-6">
-                    <div>
+                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                         Company Name
                       </label>
                       <input
                         type="text"
                         value={companyData.name}
-                        onChange={(e) => setCompanyData({...companyData, name: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
+                        readOnly
+                        disabled
+                        aria-disabled="true"
+                        title="Company name cannot be changed"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 cursor-not-allowed transition"
                       />
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        🔒 Company name cannot be changed here.
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
