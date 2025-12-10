@@ -1,10 +1,10 @@
-// frontend/src/services/webhookService.js - NEW FILE
+// src/services/webhookService.js
 
 import api from './api';
 
 const webhookService = {
   /**
-   * Get all webhooks for tenant
+   * Get all webhooks for a tenant
    */
   getWebhooksByTenant: async (tenantId) => {
     const response = await api.get(`/webhooks/tenant/${tenantId}`);
@@ -14,26 +14,19 @@ const webhookService = {
   /**
    * Create new webhook
    */
-  createWebhook: async (tenantId, userId, data) => {
-    const response = await api.post(`/webhooks/tenant/${tenantId}?userId=${userId}`, {
-      name: data.name,
-      url: data.url,
-      events: data.events,
-      isActive: true
-    });
+  createWebhook: async (tenantId, userId, webhookData) => {
+    const response = await api.post(
+      `/webhooks/tenant/${tenantId}?userId=${userId}`,
+      webhookData
+    );
     return response.data;
   },
 
   /**
    * Update webhook
    */
-  updateWebhook: async (webhookId, data) => {
-    const response = await api.put(`/webhooks/${webhookId}`, {
-      name: data.name,
-      url: data.url,
-      events: data.events,
-      isActive: data.isActive
-    });
+  updateWebhook: async (webhookId, webhookData) => {
+    const response = await api.put(`/webhooks/${webhookId}`, webhookData);
     return response.data;
   },
 

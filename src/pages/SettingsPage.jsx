@@ -12,6 +12,8 @@ const SettingsPage = () => {
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [saved, setSaved] = useState(false);
+  const [canManageSettings, setCanManageSettings] = useState(false);
+  const [checkingPermission, setCheckingPermission] = useState(true);
 
   // Profile Settings
   const [profileData, setProfileData] = useState({
@@ -21,7 +23,6 @@ const SettingsPage = () => {
   });
 
   // Company Settings
-  // NOTE: backend Tenant entity expects `name` field (not companyName)
   const [companyData, setCompanyData] = useState({
     name: user?.tenantName || '',
     subdomain: user?.subdomain || '',
@@ -36,7 +37,31 @@ const SettingsPage = () => {
     logo: null,
   });
 
+  // Check if user can manage tenant settings
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        // Quick client-side check
+        const isTenantOwner = user?.role === 'TENANT_OWNER';
+        setCanManageSettings(isTenantOwner);
+        
+        // Verify with backend
+        if (user?.tenantId) {
+          const response = await settingsService.checkSettingsPermission(user.tenantId);
+          setCanManageSettings(response.canManage);
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        setCanManageSettings(false);
+      } finally {
+        setCheckingPermission(false);
+      }
+    };
 
+    if (user) {
+      checkPermission();
+    }
+  }, [user]);
 
   // Update form data when user loads
   useEffect(() => {
@@ -56,128 +81,131 @@ const SettingsPage = () => {
   }, [user]);
 
   const handleProfileSave = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    // 1️⃣ GET existing user from backend
-    const existingUserRes = await fetch(`http://localhost:8080/api/users/${user.userId}`, {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+    try {
+      const existingUserRes = await fetch(`http://localhost:8080/api/users/${user.userId}`, {
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        }
+      });
+
+      const existingUser = await existingUserRes.json();
+
+      const payload = {
+        id: existingUser.id,
+        email: profileData.email,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        role: existingUser.role,
+        password: existingUser.password,
+        tenantId: existingUser.tenantId,
+        active: existingUser.active,
+        lastLogin: existingUser.lastLogin,
+      };
+
+      const response = await fetch(`http://localhost:8080/api/users/${user.userId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("Profile update failed");
+
+      const updatedUser = await response.json();
+
+      updateUser({
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        email: updatedUser.email,
+      });
+
+      localStorage.setItem("firstName", updatedUser.firstName);
+      localStorage.setItem("lastName", updatedUser.lastName);
+      localStorage.setItem("email", updatedUser.email);
+
+      addToast("Profile updated successfully!", "success");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      addToast("Failed: " + error.message, "error");
+    }
+  };
+
+  const handleCompanySave = async (e) => {
+    e.preventDefault();
+    
+    if (!canManageSettings) {
+      addToast("Access denied: Only tenant owners can update company details", "error");
+      return;
+    }
+
+    try {
+      const tenantId = user?.tenantId;
+
+      const existingRes = await fetch(`http://localhost:8080/api/tenants/${tenantId}`, {
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        }
+      });
+
+      if (!existingRes.ok) throw new Error("Failed to load tenant");
+
+      const existingTenant = await existingRes.json();
+
+      const payload = {
+        id: existingTenant.id,
+        name: companyData.name,
+        subdomain: existingTenant.subdomain,
+        databaseName: existingTenant.databaseName,
+        status: existingTenant.status,
+        createdAt: existingTenant.createdAt,
+        updatedAt: existingTenant.updatedAt,
+      };
+
+      const updateRes = await fetch(`http://localhost:8080/api/tenants/${tenantId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (updateRes.status === 403) {
+        throw new Error("Access denied: Only tenant owners can update company details");
       }
-    });
 
-    const existingUser = await existingUserRes.json();
+      if (!updateRes.ok) throw new Error("Failed to update company");
 
-    // 2️⃣ MERGE old + new fields
-    const payload = {
-      id: existingUser.id,
-      email: profileData.email,
-      firstName: profileData.firstName,
-      lastName: profileData.lastName,
+      const updatedTenant = await updateRes.json();
 
-      // REQUIRED FIELDS FROM EXISTING USER
-      role: existingUser.role,
-      password: existingUser.password,
-      tenantId: existingUser.tenantId,
-      active: existingUser.active,
-      lastLogin: existingUser.lastLogin,
-    };
+      updateUser({ tenantName: updatedTenant.name });
+      localStorage.setItem("tenantName", updatedTenant.name);
 
-    // 3️⃣ SEND PUT REQUEST
-    const response = await fetch(`http://localhost:8080/api/users/${user.userId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      addToast("Company updated successfully!", "success");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
 
-    if (!response.ok) throw new Error("Profile update failed");
-
-    const updatedUser = await response.json();
-
-    // 4️⃣ UPDATE AUTH CONTEXT
-    updateUser({
-      firstName: updatedUser.firstName,
-      lastName: updatedUser.lastName,
-      email: updatedUser.email,
-    });
-
-    // 5️⃣ UPDATE LOCAL STORAGE
-    localStorage.setItem("firstName", updatedUser.firstName);
-    localStorage.setItem("lastName", updatedUser.lastName);
-    localStorage.setItem("email", updatedUser.email);
-
-    addToast("Profile updated successfully!", "success");
-
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    addToast("Failed: " + error.message, "error");
-  }
-};
-
-
-  // === FIXED: real API call to update tenant/company ===
- const handleCompanySave = async (e) => {
-  e.preventDefault();
-  try {
-    const tenantId = user?.tenantId;
-
-    // STEP 1: GET EXISTING TENANT
-    const existingRes = await fetch(`http://localhost:8080/api/tenants/${tenantId}`, {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-      }
-    });
-
-    if (!existingRes.ok) throw new Error("Failed to load tenant");
-
-    const existingTenant = await existingRes.json();
-
-    // STEP 2: MERGE NEW + EXISTING REQUIRED FIELDS
-    const payload = {
-      id: existingTenant.id,
-      name: companyData.name,
-      subdomain: existingTenant.subdomain,
-      databaseName: existingTenant.databaseName,
-      status: existingTenant.status,
-      createdAt: existingTenant.createdAt,
-      updatedAt: existingTenant.updatedAt,
-    };
-
-    // STEP 3: SEND FULL OBJECT TO BACKEND
-    const updateRes = await fetch(`http://localhost:8080/api/tenants/${tenantId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!updateRes.ok) throw new Error("Failed to update company");
-
-    const updatedTenant = await updateRes.json();
-
-    // STEP 4: UPDATE AUTH CONTEXT (UI refresh everywhere)
-    updateUser({ tenantName: updatedTenant.name });
-    localStorage.setItem("tenantName", updatedTenant.name);
-
-    addToast("Company updated successfully!", "success");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-
-  } catch (err) {
-    console.error("Company update error:", err);
-    addToast("Error: " + err.message, "error");
-  }
-};
-
-
+    } catch (err) {
+      console.error("Company update error:", err);
+      addToast("Error: " + err.message, "error");
+    }
+  };
 
   const handleBrandingSave = async (e) => {
     e.preventDefault();
+    
+    if (!canManageSettings) {
+      addToast("Access denied: Only tenant owners can update branding", "error");
+      return;
+    }
+
     try {
       console.log('Updating branding:', brandingData);
       setSaved(true);
@@ -207,7 +235,6 @@ const SettingsPage = () => {
         return;
       }
 
-      // Call API to change password
       const response = await fetch(`http://localhost:8080/api/users/${user.userId}/password`, {
         method: 'PUT',
         headers: {
@@ -221,7 +248,6 @@ const SettingsPage = () => {
       });
 
       if (!response.ok) {
-        // attempt to read error body
         let message = 'Failed to change password';
         try {
           const err = await response.json();
@@ -263,6 +289,28 @@ const SettingsPage = () => {
           </button>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your account and preferences</p>
+          
+          {/* Permission Badge */}
+          {!checkingPermission && (
+            <div className="mt-3">
+              {canManageSettings ? (
+                <span className="inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-xs font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Full Settings Access (Tenant Owner)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-xs font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                  </svg>
+                  View Only Access
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -314,7 +362,7 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* Profile Tab */}
+              {/* Profile Tab - Everyone can edit */}
               {activeTab === 'profile' && (
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Profile Settings</h2>
@@ -374,28 +422,63 @@ const SettingsPage = () => {
                 </div>
               )}
 
-              {/* Company Tab */}
+              {/* Company Tab - TENANT_OWNER only */}
               {activeTab === 'company' && (
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Company Settings</h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">Manage your company information</p>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Company Settings</h2>
+                      <p className="text-gray-600 dark:text-gray-400">Manage your company information</p>
+                    </div>
+                    {!canManageSettings && (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-medium">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        Owner Only
+                      </span>
+                    )}
+                  </div>
+                  
+                  {!canManageSettings && (
+                    <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            You have view-only access
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Only the Tenant Owner can update company settings. Contact your admin if changes are needed.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <form onSubmit={handleCompanySave} className="space-y-6">
-                     <div>
+                    <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                         Company Name
                       </label>
                       <input
                         type="text"
                         value={companyData.name}
-                        readOnly
-                        disabled
-                        aria-disabled="true"
-                        title="Company name cannot be changed"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 cursor-not-allowed transition"
+                        onChange={(e) => setCompanyData({...companyData, name: e.target.value})}
+                        disabled={!canManageSettings}
+                        className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition ${
+                          !canManageSettings 
+                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-not-allowed' 
+                            : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+                        }`}
                       />
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        🔒 Company name cannot be changed here.
-                      </p>
+                      {!canManageSettings && (
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          🔒 Only tenant owner can change company name.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -406,7 +489,7 @@ const SettingsPage = () => {
                           type="text"
                           value={companyData.subdomain}
                           disabled
-                          className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed"
                         />
                         <span className="inline-flex items-center px-4 py-3 border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium">
                           .saas.com
@@ -424,7 +507,12 @@ const SettingsPage = () => {
                           value={companyData.website}
                           onChange={(e) => setCompanyData({...companyData, website: e.target.value})}
                           placeholder="https://example.com"
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
+                          disabled={!canManageSettings}
+                          className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition ${
+                            !canManageSettings 
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-not-allowed' 
+                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+                          }`}
                         />
                       </div>
                       <div>
@@ -436,7 +524,12 @@ const SettingsPage = () => {
                           value={companyData.phone}
                           onChange={(e) => setCompanyData({...companyData, phone: e.target.value})}
                           placeholder="+1 (555) 123-4567"
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
+                          disabled={!canManageSettings}
+                          className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition ${
+                            !canManageSettings 
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-not-allowed' 
+                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+                          }`}
                         />
                       </div>
                     </div>
@@ -447,120 +540,106 @@ const SettingsPage = () => {
                       </p>
                     </div>
 
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button
-                        type="submit"
-                        className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
-                      >
-                        💾 Save Company Info
-                      </button>
-                    </div>
+                    {canManageSettings && (
+                      <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          type="submit"
+                          className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
+                        >
+                          💾 Save Company Info
+                        </button>
+                      </div>
+                    )}
                   </form>
                 </div>
               )}
 
-              {/* Branding Tab */}
+              {/* Branding Tab - TENANT_OWNER only */}
               {activeTab === 'branding' && (
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Branding</h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">Customize your brand appearance</p>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Branding</h2>
+                      <p className="text-gray-600 dark:text-gray-400">Customize your brand appearance</p>
+                    </div>
+                    {!canManageSettings && (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-medium">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        Owner Only
+                      </span>
+                    )}
+                  </div>
+                  
+                  {!canManageSettings && (
+                    <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            You have view-only access
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Only the Tenant Owner can update branding. Contact your admin if changes are needed.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <form onSubmit={handleBrandingSave} className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-                        Logo
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Primary Color
                       </label>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
-                        <div className="w-32 h-32 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 rounded-lg flex items-center justify-center text-5xl shadow-lg">
-                          🏢
-                        </div>
-                        <div className="flex flex-col space-y-2">
-                          <button
-                            type="button"
-                            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition text-gray-900 dark:text-white font-medium"
-                          >
-                            📤 Upload Logo
-                          </button>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, or SVG • Max 5MB</p>
-                        </div>
+                      <input
+                        type="color"
+                        value={brandingData.primaryColor}
+                        disabled={!canManageSettings}
+                        onChange={(e) => setBrandingData({...brandingData, primaryColor: e.target.value})}
+                        className="h-12 w-20 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Secondary Color
+                      </label>
+                      <input
+                        type="color"
+                        value={brandingData.secondaryColor}
+                        disabled={!canManageSettings}
+                        onChange={(e) => setBrandingData({...brandingData, secondaryColor: e.target.value})}
+                        className="h-12 w-20 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Upload Logo
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={!canManageSettings}
+                        onChange={(e) => setBrandingData({...brandingData, logo: e.target.files[0]})}
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+
+                    {canManageSettings && (
+                      <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          type="submit"
+                          className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
+                        >
+                          💾 Save Branding
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Brand Colors</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                            Primary Color
-                          </label>
-                          <div className="flex items-center space-x-3">
-                            <div className="relative">
-                              <input
-                                type="color"
-                                value={brandingData.primaryColor}
-                                onChange={(e) => setBrandingData({...brandingData, primaryColor: e.target.value})}
-                                className="h-14 w-24 border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer shadow-md hover:shadow-lg transition"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={brandingData.primaryColor}
-                              onChange={(e) => setBrandingData({...brandingData, primaryColor: e.target.value})}
-                              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono transition"
-                            />
-                          </div>
-                          <div className="mt-3 flex items-center space-x-2">
-                            <div 
-                              className="w-12 h-12 rounded-lg shadow-md border-2 border-gray-200 dark:border-gray-600"
-                              style={{ backgroundColor: brandingData.primaryColor }}
-                            ></div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Preview</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                            Secondary Color
-                          </label>
-                          <div className="flex items-center space-x-3">
-                            <div className="relative">
-                              <input
-                                type="color"
-                                value={brandingData.secondaryColor}
-                                onChange={(e) => setBrandingData({...brandingData, secondaryColor: e.target.value})}
-                                className="h-14 w-24 border-2 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer shadow-md hover:shadow-lg transition"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={brandingData.secondaryColor}
-                              onChange={(e) => setBrandingData({...brandingData, secondaryColor: e.target.value})}
-                              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono transition"
-                            />
-                          </div>
-                          <div className="mt-3 flex items-center space-x-2">
-                            <div 
-                              className="w-12 h-12 rounded-lg shadow-md border-2 border-gray-200 dark:border-gray-600"
-                              style={{ backgroundColor: brandingData.secondaryColor }}
-                            ></div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Preview</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-lg">
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        💡 <strong>Branding Impact:</strong> These colors will be used throughout your application for buttons, links, and highlights.
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button
-                        type="submit"
-                        className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
-                      >
-                        💾 Save Branding
-                      </button>
-                    </div>
+                    )}
                   </form>
                 </div>
               )}
@@ -569,121 +648,58 @@ const SettingsPage = () => {
               {activeTab === 'security' && (
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Security</h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">Manage your account security settings</p>
-                  <div className="space-y-6">
-                    {/* 2FA Status */}
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded-lg">
-                      <div className="flex items-start">
-                        <span className="text-2xl mr-3">🔒</span>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-1">Two-Factor Authentication</h3>
-                          <p className="text-yellow-700 dark:text-yellow-200 text-sm mb-3">
-                            Two-factor authentication is currently <strong>disabled</strong>. Enable it for enhanced security.
-                          </p>
-                          <button className="px-4 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-lg hover:bg-yellow-700 dark:hover:bg-yellow-600 transition text-sm font-medium">
-                            Enable 2FA
-                          </button>
-                        </div>
-                      </div>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">Update your password</p>
+
+                  <form onSubmit={handlePasswordChange} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        name="currentPassword"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
                     </div>
 
-                    {/* Active Sessions */}
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <span className="text-lg mr-2">💻</span>
-                        Active Sessions
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">Current Session</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Windows • Chrome • Last active: now</p>
-                          </div>
-                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-xs font-semibold rounded-full">
-                            Active
-                          </span>
-                        </div>
-                      </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="newPassword"
+                        required
+                        minLength={6}
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
                     </div>
 
-                    {/* Change Password */}
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <span className="text-lg mr-2">🔐</span>
-                        Change Password
-                      </h3>
-                      <form onSubmit={handlePasswordChange} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Current Password
-                          </label>
-                          <input
-                            type="password"
-                            name="currentPassword"
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
-                            placeholder="Enter your current password"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            New Password
-                          </label>
-                          <input
-                            type="password"
-                            name="newPassword"
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
-                            placeholder="Enter a new password"
-                            required
-                          />
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Minimum 6 characters</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Confirm New Password
-                          </label>
-                          <input
-                            type="password"
-                            name="confirmPassword"
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition"
-                            placeholder="Confirm your new password"
-                            required
-                          />
-                        </div>
-
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-lg">
-                          <p className="text-sm text-blue-700 dark:text-blue-300">
-                            💡 <strong>Security Tip:</strong> Use a strong password with uppercase, lowercase, numbers, and symbols.
-                          </p>
-                        </div>
-
-                        <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <button
-                            type="submit"
-                            className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
-                          >
-                            🔐 Update Password
-                          </button>
-                        </div>
-                      </form>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
                     </div>
 
-                    {/* Danger Zone */}
-                    <div className="border-2 border-red-200 dark:border-red-900/40 rounded-lg p-4 bg-red-50 dark:bg-red-900/10">
-                      <h3 className="font-semibold text-red-900 dark:text-red-300 mb-3 flex items-center">
-                        <span className="text-lg mr-2">⚠️</span>
-                        Danger Zone
-                      </h3>
-                      <button className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition font-medium">
-                        🗑️ Delete Account
+                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg font-semibold hover:from-primary-600 hover:to-secondary-600 transition transform hover:scale-105 shadow-lg"
+                      >
+                        🔒 Change Password
                       </button>
-                      <p className="text-xs text-red-700 dark:text-red-400 mt-2">
-                        Once you delete your account, there is no going back. Please be certain.
-                      </p>
                     </div>
-                  </div>
+                  </form>
                 </div>
               )}
+
             </div>
           </div>
         </div>

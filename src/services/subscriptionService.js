@@ -4,7 +4,15 @@ import api from './api';
 
 const subscriptionService = {
   /**
-   * Get subscription for tenant
+   * Check if current user has subscription permission
+   */
+  checkPermission: async () => {
+    const response = await api.get('/subscriptions/check-permission');
+    return response.data;
+  },
+
+  /**
+   * Get subscription for tenant - SUPER_ADMIN only
    */
   getSubscription: async (tenantId) => {
     const response = await api.get(`/subscriptions/tenant/${tenantId}`);
@@ -12,7 +20,7 @@ const subscriptionService = {
   },
 
   /**
-   * Get all available plans
+   * Get all available plans - SUPER_ADMIN only
    */
   getPlans: async () => {
     const response = await api.get('/subscriptions/plans');
@@ -20,7 +28,7 @@ const subscriptionService = {
   },
 
   /**
-   * Change subscription plan
+   * Change subscription plan - SUPER_ADMIN only
    */
   changePlan: async (tenantId, plan) => {
     const response = await api.post(`/subscriptions/${tenantId}/change-plan`, null, {
@@ -30,7 +38,7 @@ const subscriptionService = {
   },
 
   /**
-   * Cancel subscription
+   * Cancel subscription - SUPER_ADMIN only
    */
   cancelSubscription: async (tenantId) => {
     const response = await api.post(`/subscriptions/${tenantId}/cancel`);
@@ -38,7 +46,7 @@ const subscriptionService = {
   },
 
   /**
-   * Check if subscription is valid
+   * Check if subscription is valid - SUPER_ADMIN only
    */
   isSubscriptionValid: async (tenantId) => {
     const response = await api.get(`/subscriptions/${tenantId}/valid`);

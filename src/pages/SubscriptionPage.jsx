@@ -1,11 +1,16 @@
-// frontend/src/pages/SubscriptionPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
 import subscriptionService from '../services/subscriptionService';
 
+/**
+ * SubscriptionPage with proper permission structure:
+ * - TENANT_OWNER: Full management access ✔
+ * - TENANT_ADMIN: View only ⚠
+ * - SUPER_ADMIN: View only (support) ⚠
+ * - USER & VIEWER: No access ❌
+ */
 const SubscriptionPage = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -14,14 +19,9 @@ const SubscriptionPage = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated || !user) {
-      navigate('/login');
-      return;
-    }
-  }, [isAuthenticated, user, navigate]);
+  const [canView, setCanView] = useState(false);
+  const [canManage, setCanManage] = useState(false);
+  const [checkingPermission, setCheckingPermission] = useState(true);
 
   const planDetails = {
     FREE: {
@@ -92,11 +92,60 @@ const SubscriptionPage = () => {
     },
   };
 
+  // Check authentication
   useEffect(() => {
-    if (user && user.tenantId) {
+    if (!isAuthenticated || !user) {
+      navigate('/login');
+      return;
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Check permissions
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        // Quick client-side check
+        const allowedRoles = ['TENANT_OWNER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+        if (!allowedRoles.includes(user?.role)) {
+          setCanView(false);
+          setCanManage(false);
+          setCheckingPermission(false);
+          //addToast('Access denied: Insufficient permissions to view subscriptions', 'error');
+          setTimeout(() => navigate('/dashboard'), 2000);
+          return;
+        }
+
+        // Verify with backend
+        const response = await subscriptionService.checkPermission();
+        setCanView(response.canView);
+        setCanManage(response.canManage);
+        
+        if (!response.canView) {
+          addToast('Access denied: You cannot view subscription details', 'error');
+          setTimeout(() => navigate('/dashboard'), 2000);
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        setCanView(false);
+        setCanManage(false);
+        addToast('Access denied', 'error');
+        setTimeout(() => navigate('/dashboard'), 2000);
+      } finally {
+        setCheckingPermission(false);
+      }
+    };
+
+    if (user) {
+      checkPermission();
+    }
+  }, [user, navigate, addToast]);
+
+  // Fetch subscription data
+  useEffect(() => {
+    if (user && user.tenantId && canView && !checkingPermission) {
       fetchData();
     }
-  }, [user]);
+  }, [user, canView, checkingPermission]);
 
   const fetchData = async () => {
     try {
@@ -109,13 +158,24 @@ const SubscriptionPage = () => {
       setPlans(plansData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      addToast('Failed to load subscription data', 'error');
+      if (error.response?.status === 403) {
+        addToast('Access denied: Cannot view subscription details', 'error');
+        navigate('/dashboard');
+      } else {
+        addToast('Failed to load subscription data', 'error');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpgrade = async (planName) => {
+    // Only TENANT_OWNER can manage
+    if (!canManage) {
+      addToast('Access denied: Only tenant owners can change subscription plans', 'error');
+      return;
+    }
+
     if (window.confirm(`Upgrade to ${planDetails[planName].name} plan?`)) {
       setUpgrading(true);
       try {
@@ -124,13 +184,60 @@ const SubscriptionPage = () => {
         fetchData();
       } catch (error) {
         console.error('Error upgrading plan:', error);
-        addToast('Failed to upgrade plan. Please try again.', 'error');
+        if (error.response?.status === 403) {
+          addToast('Access denied: Only tenant owners can change plans', 'error');
+        } else {
+          addToast('Failed to upgrade plan. Please try again.', 'error');
+        }
       } finally {
         setUpgrading(false);
       }
     }
   };
 
+  // Show loading while checking permission
+  if (checkingPermission) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-primary-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied if no view permission
+  if (!canView) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center max-w-md">
+          <div className="bg-red-100 dark:bg-red-900/20 rounded-full p-6 mx-auto w-24 h-24 flex items-center justify-center mb-6">
+            <svg className="w-12 h-12 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Access Denied</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            You don't have permission to view subscription details.
+            <br />
+            <span className="text-sm mt-2 block">Only Tenant Owners and Admins can access this page.</span>
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while fetching data
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -144,6 +251,31 @@ const SubscriptionPage = () => {
       </div>
     );
   }
+
+  // Determine badge based on user role
+  const getAccessBadge = () => {
+    if (user?.role === 'TENANT_OWNER') {
+      return {
+        text: 'Full Management Access',
+        icon: '✓',
+        color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+      };
+    } else if (user?.role === 'TENANT_ADMIN') {
+      return {
+        text: 'View Only Access',
+        icon: '👁',
+        color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+      };
+    } else if (user?.role === 'SUPER_ADMIN') {
+      return {
+        text: 'Support View Access',
+        icon: '🔧',
+        color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200'
+      };
+    }
+  };
+
+  const accessBadge = getAccessBadge();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -160,7 +292,34 @@ const SubscriptionPage = () => {
             Back to Dashboard
           </button>
           <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Choose Your Plan</h1>
+            {/* Access Badge */}
+            <div className={`inline-flex items-center gap-2 ${accessBadge.color} px-4 py-2 rounded-full text-sm font-medium mb-4`}>
+              <span>{accessBadge.icon}</span>
+              {accessBadge.text}
+            </div>
+            
+            {/* Warning for view-only users */}
+            {!canManage && (
+              <div className="max-w-2xl mx-auto mb-4">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        You have view-only access
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Only the Tenant Owner can upgrade, downgrade, or cancel subscriptions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Subscription Plans</h1>
             <p className="mt-3 text-lg text-gray-600 dark:text-gray-400">
               Current Plan:{' '}
               <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-secondary-600 dark:from-primary-400 dark:to-secondary-400">
@@ -196,14 +355,12 @@ const SubscriptionPage = () => {
                       details.popular ? 'ring-4 ring-primary-500 md:scale-105' : ''
                     }`}
                   >
-                    {/* Popular Badge */}
                     {details.popular && (
                       <div className="absolute top-0 right-0 bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 text-sm font-bold rounded-bl-lg shadow-lg">
                         🌟 POPULAR
                       </div>
                     )}
 
-                    {/* Current Plan Badge */}
                     {isCurrent && (
                       <div className="absolute top-0 left-0 bg-green-500 dark:bg-green-600 text-white px-4 py-2 text-sm font-bold rounded-br-lg shadow-lg">
                         ✓ CURRENT
@@ -211,17 +368,14 @@ const SubscriptionPage = () => {
                     )}
 
                     <div className="p-8">
-                      {/* Plan Name */}
                       <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                         {details.name}
                       </h3>
 
-                      {/* Description */}
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                         {details.description}
                       </p>
 
-                      {/* Price */}
                       <div className="mb-6">
                         <div className="flex items-baseline">
                           <span className="text-5xl font-extrabold text-gray-900 dark:text-white">
@@ -238,7 +392,6 @@ const SubscriptionPage = () => {
                         )}
                       </div>
 
-                      {/* Features */}
                       <ul className="space-y-3 mb-8">
                         {details.features.map((feature, index) => (
                           <li key={index} className="flex items-start">
@@ -250,17 +403,19 @@ const SubscriptionPage = () => {
                         ))}
                       </ul>
 
-                      {/* CTA Button */}
                       <button
                         onClick={() => handleUpgrade(plan)}
-                        disabled={isCurrent || upgrading || !isUpgrade}
+                        disabled={isCurrent || upgrading || !isUpgrade || !canManage}
                         className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center ${
                           isCurrent
                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                            : !canManage
+                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                             : isUpgrade
                             ? 'bg-gradient-to-r from-primary-500 to-secondary-500 text-white hover:from-primary-600 hover:to-secondary-600 transform hover:scale-105 shadow-lg hover:shadow-xl'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         }`}
+                        title={!canManage && !isCurrent ? 'Only Tenant Owner can change plans' : ''}
                       >
                         {upgrading ? (
                           <>
@@ -271,6 +426,8 @@ const SubscriptionPage = () => {
                           </>
                         ) : isCurrent ? (
                           '✓ Current Plan'
+                        ) : !canManage ? (
+                          '🔒 Owner Only'
                         ) : isUpgrade ? (
                           '⬆️ Upgrade Now'
                         ) : (
@@ -283,103 +440,9 @@ const SubscriptionPage = () => {
               })}
             </div>
 
-            {/* Comparison Table */}
-            <div className="mt-16 bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-              <div className="px-8 py-6 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  📊 Detailed Comparison
-                </h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                        Feature
-                      </th>
-                      {plans.map((plan) => (
-                        <th 
-                          key={plan} 
-                          className={`px-8 py-4 text-center text-sm font-semibold ${
-                            planDetails[plan].popular
-                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-900 dark:text-primary-300'
-                              : 'text-gray-900 dark:text-white'
-                          }`}
-                        >
-                          {planDetails[plan].name}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                      <td className="px-8 py-4 text-sm font-medium text-gray-900 dark:text-white">Price</td>
-                      {plans.map((plan) => (
-                        <td 
-                          key={plan}
-                          className={`px-8 py-4 text-center text-sm font-bold ${
-                            planDetails[plan].popular
-                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-900 dark:text-primary-300'
-                              : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                        >
-                          ${planDetails[plan].price.toFixed(2)}/mo
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                      <td className="px-8 py-4 text-sm font-medium text-gray-900 dark:text-white">Users</td>
-                      {plans.map((plan) => (
-                        <td 
-                          key={plan}
-                          className={`px-8 py-4 text-center text-sm ${
-                            planDetails[plan].popular
-                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-900 dark:text-primary-300'
-                              : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                        >
-                          {planDetails[plan].features[0]}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                      <td className="px-8 py-4 text-sm font-medium text-gray-900 dark:text-white">API Calls</td>
-                      {plans.map((plan) => (
-                        <td 
-                          key={plan}
-                          className={`px-8 py-4 text-center text-sm ${
-                            planDetails[plan].popular
-                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-900 dark:text-primary-300'
-                              : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                        >
-                          {planDetails[plan].features[1]}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                      <td className="px-8 py-4 text-sm font-medium text-gray-900 dark:text-white">Support</td>
-                      {plans.map((plan) => (
-                        <td 
-                          key={plan}
-                          className={`px-8 py-4 text-center text-sm ${
-                            planDetails[plan].popular
-                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-900 dark:text-primary-300'
-                              : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                        >
-                          {planDetails[plan].features[2]}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
             {/* Current Usage Section */}
             {currentSubscription && (
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                   <div className="flex items-center justify-between">
                     <div>
@@ -417,7 +480,7 @@ const SubscriptionPage = () => {
                     <div>
                       <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Renewal Date</p>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                        {new Date(currentSubscription.renewalDate).toLocaleDateString()}
+                        {new Date(currentSubscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </p>
                     </div>
                     <div className="bg-purple-100 dark:bg-purple-900/40 rounded-full p-3">
@@ -429,64 +492,43 @@ const SubscriptionPage = () => {
                 </div>
               </div>
             )}
+
+            {/* Permission Info Box */}
+            <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">📋 Subscription Access Levels</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-green-600 dark:text-green-400 font-bold">✓</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">Tenant Owner</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Full management access</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">👁</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">Tenant Admin</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">View only access</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-purple-600 dark:text-purple-400 font-bold">🔧</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">Super Admin</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">View only (support)</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-gray-300 dark:border-gray-600">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-gray-400 font-bold">❌</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">Users & Viewers</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">No access</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-
-        {/* FAQ Section */}
-        <div className="mt-16 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 text-center">
-            ❓ Frequently Asked Questions
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">Can I change plans anytime?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Yes! You can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.
-              </p>
-            </div>
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">What payment methods do you accept?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                We accept all major credit cards (Visa, Mastercard, American Express) and PayPal.
-              </p>
-            </div>
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">Is there a free trial?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Yes! All new accounts get a 14-day free trial on any paid plan, no credit card required.
-              </p>
-            </div>
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">Can I cancel anytime?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Absolutely! There are no long-term contracts or cancellation fees. Cancel anytime from your account settings.
-              </p>
-            </div>
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">What happens if I exceed my API calls?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                We'll notify you when you're approaching your limit. You can upgrade to a higher plan or purchase additional calls.
-              </p>
-            </div>
-            <div className="border-l-4 border-primary-500 pl-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-lg">Do you offer bulk discounts?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Yes! Contact our sales team for custom pricing on Enterprise plans and large commitments.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Support Section */}
-        <div className="mt-12 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl shadow-xl p-8 text-center">
-          <h3 className="text-2xl font-bold text-white mb-3">Need Help Choosing?</h3>
-          <p className="text-primary-100 mb-6">
-            Our team is here to help you find the perfect plan for your needs.
-          </p>
-          <button className="px-8 py-3 bg-white text-primary-600 font-bold rounded-lg hover:bg-gray-100 transition transform hover:scale-105">
-            📧 Contact Our Team
-          </button>
-        </div>
       </main>
     </div>
   );
