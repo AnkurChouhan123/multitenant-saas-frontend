@@ -1,22 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/common/Toast';
 import activityService from '../services/activityService';
-import { ArrowLeft, RefreshCw, Filter } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Filter, ShieldAlert } from 'lucide-react';
 
+/**
+ * ActivityLogPage - TENANT_OWNER & TENANT_ADMIN ONLY
+ * USER & VIEWER are completely denied access
+ */
 const ActivityLogPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
+  
   const [activities, setActivities] = useState([]);
   const [filteredActivities, setFilteredActivities] = useState([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [canAccess, setCanAccess] = useState(false);
+  const [checkingPermission, setCheckingPermission] = useState(true);
+
+  // Check permissions FIRST
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        // Quick client-side check
+        const allowedRoles = ['TENANT_OWNER', 'TENANT_ADMIN'];
+        if (!allowedRoles.includes(user?.role)) {
+          setCanAccess(false);
+          setCheckingPermission(false);
+          // addToast('Access denied: Only admins can view activity logs', 'error');
+          setTimeout(() => navigate('/dashboard'), 2000);
+          return;
+        }
+
+        // Backend verification
+        const response = await activityService.checkActivityPermission(user.tenantId);
+        setCanAccess(response.canViewLogs);
+        
+        if (!response.canViewLogs) {
+          // addToast('Access denied: You cannot view activity logs', 'error');
+          setTimeout(() => navigate('/dashboard'), 2000);
+        }
+      } catch (error) {
+        console.error('Permission check failed:', error);
+        setCanAccess(false);
+        // addToast('Access denied', 'error');
+        setTimeout(() => navigate('/dashboard'), 2000);
+      } finally {
+        setCheckingPermission(false);
+      }
+    };
+
+    if (user) {
+      checkPermission();
+    }
+  }, [user, navigate, addToast]);
 
   useEffect(() => {
-    fetchActivities();
-  }, []);
+    if (canAccess && !checkingPermission) {
+      fetchActivities();
+    }
+  }, [canAccess, checkingPermission]);
 
   useEffect(() => {
     applyFilter();
@@ -30,7 +78,12 @@ const ActivityLogPage = () => {
       setError(null);
     } catch (err) {
       console.error('Error fetching activities:', err);
-      setError('Failed to load activities');
+      if (err.response?.status === 403) {
+        // addToast('Access denied: You cannot view activity logs', 'error');
+        navigate('/dashboard');
+      } else {
+        setError('Failed to load activities');
+      }
     } finally {
       setLoading(false);
     }
@@ -99,18 +152,56 @@ const ActivityLogPage = () => {
     }).format(date);
   };
 
+  // Show checking permission state
+  if (checkingPermission) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-20">
+        <div className="text-center">
+          <svg className="animate-spin h-16 w-16 text-purple-500 dark:text-purple-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-6 text-lg font-semibold text-gray-700 dark:text-gray-300">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied screen
+  if (!canAccess) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-20">
+        <div className="text-center max-w-md px-4">
+          <div className="bg-red-100 dark:bg-red-900/20 rounded-full p-6 mx-auto w-24 h-24 flex items-center justify-center mb-6">
+            <ShieldAlert className="w-12 h-12 text-red-600 dark:text-red-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Access Denied</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-2">
+            You don't have permission to view activity logs.
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-500 mb-8">
+            Only <span className="font-semibold">Tenant Owners</span> and <span className="font-semibold">Tenant Admins</span> can access this page.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center">
-            <svg className="animate-spin h-16 w-16 text-purple-500 dark:text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          </div>
+          <svg className="animate-spin h-16 w-16 text-purple-500 dark:text-purple-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
           <p className="mt-6 text-lg font-semibold text-gray-700 dark:text-gray-300">Loading activity log...</p>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Please wait while we fetch your data</p>
         </div>
       </div>
     );
@@ -134,7 +225,6 @@ const ActivityLogPage = () => {
           </button>
         </div>
 
-        {/* Back Button */}
         <button
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2 text-sm font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition group"
@@ -144,9 +234,8 @@ const ActivityLogPage = () => {
         </button>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 backdrop-blur-sm p-4 rounded-xl animate-in slide-in-from-top">
+        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 backdrop-blur-sm p-4 rounded-xl">
           <p className="text-sm text-red-700 dark:text-red-300 font-semibold">⚠️ {error}</p>
         </div>
       )}
@@ -158,7 +247,6 @@ const ActivityLogPage = () => {
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 hidden md:inline">Filter by:</span>
         </div>
         
-        {/* Desktop Filters */}
         <div className="hidden md:flex flex-wrap gap-2">
           {filterButtons.map((btn) => (
             <button
@@ -177,7 +265,6 @@ const ActivityLogPage = () => {
           ))}
         </div>
 
-        {/* Mobile Filters */}
         <div className="md:hidden">
           <button
             onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
@@ -214,7 +301,7 @@ const ActivityLogPage = () => {
 
       {/* Activities List */}
       {filteredActivities.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-lg hover:shadow-xl transition-shadow">
+        <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-lg">
           <div className="text-5xl sm:text-6xl mb-4">📋</div>
           <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">No activities found</h3>
           <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Activity logs will appear here as users interact with the system</p>
@@ -226,29 +313,27 @@ const ActivityLogPage = () => {
             return (
               <div
                 key={activity.id}
-                className={`bg-white dark:bg-gray-800/50 backdrop-blur-sm border ${colors.border} rounded-xl sm:rounded-xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-102 hover:-translate-y-1`}
+                className={`bg-white dark:bg-gray-800/50 backdrop-blur-sm border ${colors.border} rounded-xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300`}
               >
-                <div className="flex flex-col sm:flex-row items-start sm:items-start gap-4">
-                  {/* Icon */}
-                  <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${colors.bg} flex-none`}>
+                <div className="flex items-start gap-4">
+                  <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${colors.bg}`}>
                     <span className="text-2xl">{getActivityIcon(activity.actionType)}</span>
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 w-full">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-gray-100">{activity.userName}</p>
                       <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{formatDate(activity.createdAt)}</span>
                     </div>
                     
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 leading-relaxed">{activity.action}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">{activity.action}</p>
                     
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-600 dark:text-gray-400 mb-2">
+                    <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400 mb-2">
                       <span className="flex items-center gap-1.5">
                         <span>🌐</span>
                         <span className="font-medium">IP: {activity.ipAddress || 'N/A'}</span>
                       </span>
-                      <span className={`inline-flex px-3 py-1 rounded-full font-bold ${colors.badge}`}>
+                      <span className={`px-3 py-1 rounded-full font-bold ${colors.badge}`}>
                         {activity.actionType.charAt(0).toUpperCase() + activity.actionType.slice(1)}
                       </span>
                     </div>
@@ -264,18 +349,13 @@ const ActivityLogPage = () => {
         </div>
       )}
 
-      {/* Pagination Info */}
       {filteredActivities.length > 0 && (
-        <div className="mt-8 p-4 sm:p-6 bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="mt-8 p-4 sm:p-6 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 rounded-xl shadow-lg">
+          <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Showing <span className="font-bold text-gray-900 dark:text-gray-100">{filteredActivities.length}</span> of{' '}
               <span className="font-bold text-gray-900 dark:text-gray-100">{activities.length}</span> activities
             </p>
-            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span>Auto-refreshes every 30 seconds</span>
-            </div>
           </div>
         </div>
       )}

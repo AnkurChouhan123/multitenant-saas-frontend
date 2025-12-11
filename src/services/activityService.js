@@ -1,10 +1,18 @@
-// frontend/src/services/activityService.js - ENHANCED
+// frontend/src/services/activityService.js
 
 import api from './api';
 
 const activityService = {
   /**
-   * Get all activities for a tenant
+   * Check if current user can access activity logs
+   */
+  checkActivityPermission: async (tenantId) => {
+    const response = await api.get(`/activities/check-permission/${tenantId}`);
+    return response.data;
+  },
+
+  /**
+   * Get all activities for a tenant - ADMIN ONLY
    */
   getActivitiesByTenant: async (tenantId) => {
     const response = await api.get(`/activities/tenant/${tenantId}`);
@@ -12,7 +20,7 @@ const activityService = {
   },
 
   /**
-   * Get activities with pagination
+   * Get activities with pagination - ADMIN ONLY
    */
   getActivitiesPage: async (tenantId, page = 0, size = 20) => {
     const response = await api.get(`/activities/tenant/${tenantId}/page`, {
@@ -22,7 +30,7 @@ const activityService = {
   },
 
   /**
-   * Get activities by type
+   * Get activities by type - ADMIN ONLY
    */
   getActivitiesByType: async (tenantId, actionType) => {
     const response = await api.get(`/activities/tenant/${tenantId}/type/${actionType}`);
@@ -30,7 +38,7 @@ const activityService = {
   },
 
   /**
-   * Get activities in date range
+   * Get activities in date range - ADMIN ONLY
    */
   getActivitiesByDateRange: async (tenantId, startDate, endDate) => {
     const response = await api.get(`/activities/tenant/${tenantId}/range`, {
@@ -94,14 +102,8 @@ const activityService = {
 
     activities.forEach(activity => {
       const activityDate = new Date(activity.createdAt);
-
-      // Count by type
       stats.byType[activity.actionType] = (stats.byType[activity.actionType] || 0) + 1;
-
-      // Count by user
       stats.byUser[activity.userName] = (stats.byUser[activity.userName] || 0) + 1;
-
-      // Count by time range
       if (activityDate > oneDayAgo) stats.last24Hours++;
       if (activityDate > sevenDaysAgo) stats.last7Days++;
       if (activityDate > thirtyDaysAgo) stats.last30Days++;
