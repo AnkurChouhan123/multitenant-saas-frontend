@@ -569,10 +569,112 @@ const UsersPage = () => {
         />
       )}
 
-      {/* Modals - Only show if user can manage */}
+      {/* Add User Modal - Only show if user can manage */}
       {canManageUsers && showModal && (
         <div className="fixed z-50 inset-0 overflow-y-auto">
-          {/* Add User Modal content */}
+          <div className="flex items-center justify-center min-h-screen px-4 backdrop-blur-sm">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setShowModal(false)}></div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl z-50 max-w-md w-full p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6">Add New User</h2>
+              {error && (
+                <div className="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 p-4 rounded-lg">
+                  <p className="text-xs sm:text-sm text-red-700 dark:text-red-300 font-semibold">{error}</p>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <FormInput
+                  label="First Name"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                />
+                <FormInput
+                  label="Last Name"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+                <FormInput
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+                <FormInput
+                  label="Password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  helperText="Minimum 6 characters"
+                />
+                <FormSelect
+                  label="Role"
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  options={[
+                    { value: 'USER', label: 'User' },
+                    { value: 'TENANT_ADMIN', label: 'Admin' },
+                    { value: 'VIEWER', label: 'Viewer' }
+                  ]}
+                />
+                <div className="flex justify-end gap-3 pt-6">
+                  <FormButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowModal(false)}
+                    className="px-4 py-2"
+                  >
+                    Cancel
+                  </FormButton>
+                  <FormButton
+                    type="submit"
+                    variant="primary"
+                    loading={submitting}
+                    className="px-6 py-2"
+                  >
+                    Create User
+                  </FormButton>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal - Only show if user can manage */}
+      {canManageUsers && showImportModal && (
+        <div className="fixed z-50 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 backdrop-blur-sm">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setShowImportModal(false)}></div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl z-50 max-w-2xl w-full p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">Import Users from CSV</h2>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Upload a CSV file with columns: firstName, lastName, email, role
+              </p>
+              <FileUpload
+                accept=".csv"
+                maxSize={5242880}
+                maxFiles={1}
+                multiple={false}
+                onUpload={handleImportUsers}
+              />
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
