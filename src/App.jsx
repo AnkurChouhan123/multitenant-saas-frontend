@@ -18,8 +18,7 @@ import CommandPalette from "./components/common/CommandPalette";
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
-import SuperAdminDashboard from "./pages/superadmin/SuperAdminDashboard";
-import TenantsPage from "./pages/superadmin/TenantsPage";
+
 
 // Auth Pages
 import LoginPage from "./pages/LoginPage";
@@ -37,6 +36,8 @@ import ActivityLogPage from "./pages/ActivityLogPage";
 import ApiKeysPage from "./pages/ApiKeysPage";
 import WebhooksPage from "./pages/WebhooksPage";
 import FileManagerPage from "./pages/FileManagerPage";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+
 
 // ==========================================================
 // 🔐 PROTECTED ROUTES FOR TENANT USERS
@@ -95,30 +96,10 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* ================================
-                     SUPER ADMIN ROUTES 
-                   ================================ */}
-                <Route
-                  path="/superadmin/dashboard"
-                  element={
-                    <SuperAdminRoute>
-                      <SuperAdminDashboard />
-                    </SuperAdminRoute>
-                  }
-                />
+              
 
-                <Route
-                  path="/superadmin/tenants"
-                  element={
-                    <SuperAdminRoute>
-                      <TenantsPage />
-                    </SuperAdminRoute>
-                  }
-                />
+                
 
-                {/* ================================
-                     TENANT PROTECTED ROUTES 
-                   ================================ */}
                 <Route
                   path="/dashboard"
                   element={
@@ -203,6 +184,7 @@ function App() {
                 {/* DEFAULT ROUTES */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
+                <Route path="/super-admin" element={<SuperAdminDashboard />} />
 
               </Routes>
             </ToastProvider>
