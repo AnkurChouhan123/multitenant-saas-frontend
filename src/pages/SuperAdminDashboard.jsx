@@ -1,187 +1,505 @@
+// src/pages/SuperAdminDashboard.jsx - FIXED AND COMPLETE
 import React, { useState, useEffect } from 'react';
-import { Building2, DollarSign, Activity, TrendingUp, Shield, Settings, Database, Server, AlertTriangle, Lock, Zap, Mail, Code, Flag, Wrench, Users, Globe, CreditCard, BarChart3, Bell, Power, Pause, Play, Trash2, Eye, UserCheck, Clock, CheckCircle, XCircle, Search, Filter, RefreshCw, Plus, Edit } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import superAdminService from '../services/superAdminService';
+import StatsCard from '../components/common/StatsCard';
+import { 
+  Building2, DollarSign, Activity, TrendingUp, Shield, Settings, 
+  Database, Server, Lock, Users, CreditCard, BarChart3, 
+  Pause, Play, Trash2, UserCheck, Search, RefreshCw, Plus, 
+  Download, CheckCircle, XCircle, ArrowLeft, Edit, Mail,
+  Zap, AlertTriangle, Eye, Power, FileText, Code
+} from 'lucide-react';
 
 const SuperAdminDashboard = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Platform-wide data (aggregates only)
-  const [platformStats, setPlatformStats] = useState({
-    totalTenants: 127,
-    activeTenants: 98,
-    suspendedTenants: 12,
-    trialTenants: 17,
-    totalUsers: 3420,
-    dau: 1250,
-    mau: 2890,
-    mrr: 45670.00,
-    totalRevenue: 156780.00,
-    apiCalls: 4567890,
-    storageUsed: 456.7, // GB
-    errorRate: 0.12,
-    uptime: 99.97
-  });
+  // Data States
+  const [platformStats, setPlatformStats] = useState(null);
+  const [platformHealth, setPlatformHealth] = useState(null);
+  const [tenants, setTenants] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [globalAnalytics, setGlobalAnalytics] = useState(null);
+  const [platformUsage, setPlatformUsage] = useState(null);
+  const [revenueAnalytics, setRevenueAnalytics] = useState(null);
+  const [securityAlerts, setSecurityAlerts] = useState([]);
+  const [loginHistory, setLoginHistory] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [platformConfig, setPlatformConfig] = useState(null);
+  const [integrations, setIntegrations] = useState(null);
+  const [systemErrors, setSystemErrors] = useState([]);
+  const [backendLogs, setBackendLogs] = useState([]);
 
-  const [tenants, setTenants] = useState([
-    { id: 1, name: 'Acme Corp', subdomain: 'acme', status: 'ACTIVE', plan: 'PRO', userCount: 45, storage: 23.4, apiCalls: 45670, createdAt: '2024-01-15', lastActive: '2024-12-13 10:30' },
-    { id: 2, name: 'TechStart Inc', subdomain: 'techstart', status: 'TRIAL', plan: 'FREE', userCount: 5, storage: 1.2, apiCalls: 2340, createdAt: '2024-11-20', lastActive: '2024-12-13 09:15' },
-    { id: 3, name: 'GlobalSoft', subdomain: 'globalsoft', status: 'ACTIVE', plan: 'ENTERPRISE', userCount: 150, storage: 89.5, apiCalls: 234560, createdAt: '2023-08-10', lastActive: '2024-12-13 11:45' },
-    { id: 4, name: 'StartupHub', subdomain: 'startuphub', status: 'SUSPENDED', plan: 'BASIC', userCount: 15, storage: 4.3, apiCalls: 0, createdAt: '2024-06-05', lastActive: '2024-11-28 14:20' },
-  ]);
-
-  const [plans, setPlans] = useState([
-    { id: 1, name: 'FREE', price: 0, maxUsers: 5, maxStorage: 5, maxApiCalls: 1000, features: 'Basic features', active: true, tenantCount: 17 },
-    { id: 2, name: 'BASIC', price: 29.99, maxUsers: 25, maxStorage: 50, maxApiCalls: 10000, features: 'All basic features', active: true, tenantCount: 42 },
-    { id: 3, name: 'PRO', price: 99.99, maxUsers: 100, maxStorage: 200, maxApiCalls: 50000, features: 'Advanced features', active: true, tenantCount: 56 },
-    { id: 4, name: 'ENTERPRISE', price: 299.99, maxUsers: -1, maxStorage: -1, maxApiCalls: -1, features: 'Unlimited everything', active: true, tenantCount: 12 },
-  ]);
-
+  // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [showCreateTenantModal, setShowCreateTenantModal] = useState(false);
-  const [newTenant, setNewTenant] = useState({ name: '', subdomain: '' });
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [modalData, setModalData] = useState({});
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Show toast notification
+  useEffect(() => { loadData(); }, [activeTab]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'overview') {
+        await Promise.all([loadPlatformStats(), loadPlatformHealth()]);
+      } else if (activeTab === 'tenants') {
+        await loadTenants();
+      } else if (activeTab === 'plans') {
+        await Promise.all([loadPlans(), loadSubscriptions()]);
+      } else if (activeTab === 'analytics') {
+        await Promise.all([loadGlobalAnalytics(), loadPlatformUsage(), loadRevenueAnalytics()]);
+      } else if (activeTab === 'security') {
+        await Promise.all([loadSecurityAlerts(), loadLoginHistory(), loadAuditLogs()]);
+      } else if (activeTab === 'config') {
+        await loadPlatformConfig();
+      } else if (activeTab === 'integrations') {
+        await loadIntegrations();
+      } else if (activeTab === 'monitoring') {
+        await Promise.all([loadSystemErrors(), loadBackendLogs()]);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      showToast('Failed to load data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // API Calls
+  const loadPlatformStats = async () => {
+    const data = await superAdminService.getPlatformStats();
+    setPlatformStats(data);
+  };
+
+  const loadPlatformHealth = async () => {
+    const data = await superAdminService.getPlatformHealth();
+    setPlatformHealth(data);
+  };
+
+  const loadTenants = async () => {
+    const data = await superAdminService.getAllTenants();
+    setTenants(data);
+  };
+
+  const loadPlans = async () => {
+    const data = await superAdminService.getAllPlans();
+    setPlans(data);
+  };
+
+  const loadSubscriptions = async () => {
+    const data = await superAdminService.getAllSubscriptions();
+    setSubscriptions(data);
+  };
+
+  const loadGlobalAnalytics = async () => {
+    const data = await superAdminService.getGlobalAnalytics();
+    setGlobalAnalytics(data);
+  };
+
+  const loadPlatformUsage = async () => {
+    const data = await superAdminService.getPlatformUsage();
+    setPlatformUsage(data);
+  };
+
+  const loadRevenueAnalytics = async () => {
+    const data = await superAdminService.getRevenueAnalytics();
+    setRevenueAnalytics(data);
+  };
+
+  const loadSecurityAlerts = async () => {
+    const data = await superAdminService.getSecurityAlerts();
+    setSecurityAlerts(data);
+  };
+
+  const loadLoginHistory = async () => {
+    const data = await superAdminService.getGlobalLoginHistory();
+    setLoginHistory(data);
+  };
+
+  const loadAuditLogs = async () => {
+    const data = await superAdminService.getGlobalAuditLogs();
+    setAuditLogs(data);
+  };
+
+  const loadPlatformConfig = async () => {
+    const data = await superAdminService.getPlatformConfig();
+    setPlatformConfig(data);
+  };
+
+  const loadIntegrations = async () => {
+    const data = await superAdminService.getIntegrations();
+    setIntegrations(data);
+  };
+
+  const loadSystemErrors = async () => {
+    const data = await superAdminService.getSystemErrors();
+    setSystemErrors(data);
+  };
+
+  const loadBackendLogs = async () => {
+    const data = await superAdminService.getBackendLogs();
+    setBackendLogs(data);
+  };
+
+  // Tenant Actions
+  const handleCreateTenant = async () => {
+    if (!modalData.name || !modalData.subdomain) {
+      showToast('Please fill all fields', 'error');
+      return;
+    }
+    try {
+      await superAdminService.createTenant(modalData);
+      showToast('Tenant created successfully', 'success');
+      closeModal();
+      loadTenants();
+    } catch (error) {
+      showToast(error.response?.data?.message || 'Failed to create tenant', 'error');
+    }
+  };
+
+  const handleSuspendTenant = async (tenantId) => {
+    if (!confirm('Suspend this tenant?')) return;
+    try {
+      const reason = prompt('Reason (optional):');
+      await superAdminService.suspendTenant(tenantId, reason);
+      showToast('Tenant suspended', 'success');
+      loadTenants();
+    } catch (error) {
+      showToast('Failed to suspend', 'error');
+    }
+  };
+
+  const handleActivateTenant = async (tenantId) => {
+    try {
+      await superAdminService.activateTenant(tenantId);
+      showToast('Tenant activated', 'success');
+      loadTenants();
+    } catch (error) {
+      showToast('Failed to activate', 'error');
+    }
+  };
+
+  const handleDeleteTenant = async (tenantId) => {
+    if (!confirm('Delete this tenant? Cannot be undone.')) return;
+    try {
+      await superAdminService.deleteTenant(tenantId);
+      showToast('Tenant deleted', 'success');
+      loadTenants();
+    } catch (error) {
+      showToast('Failed to delete', 'error');
+    }
+  };
+
+  const handleImpersonate = async (tenantId) => {
+    if (!confirm('Impersonate this tenant owner?')) return;
+    try {
+      const res = await superAdminService.impersonateTenantOwner(tenantId);
+      localStorage.setItem('token', res.token);
+      window.location.href = '/dashboard';
+    } catch (error) {
+      showToast('Failed to impersonate', 'error');
+    }
+  };
+
+  const handleForceLogout = async (tenantId) => {
+    if (!confirm('Force logout all users of this tenant?')) return;
+    try {
+      await superAdminService.forceLogoutTenant(tenantId);
+      showToast('All users logged out', 'success');
+    } catch (error) {
+      showToast('Failed to force logout', 'error');
+    }
+  };
+
+  const handleAssignPlan = async (tenantId, planName) => {
+    try {
+      await superAdminService.assignPlanToTenant(tenantId, planName);
+      showToast('Plan assigned successfully', 'success');
+      loadTenants();
+    } catch (error) {
+      showToast('Failed to assign plan', 'error');
+    }
+  };
+
+  const handleCreatePlan = async () => {
+    try {
+      await superAdminService.createPlan(modalData);
+      showToast('Plan created successfully', 'success');
+      closeModal();
+      loadPlans();
+    } catch (error) {
+      showToast('Failed to create plan', 'error');
+    }
+  };
+
+  const handleForcePasswordReset = async () => {
+    const email = prompt('Enter user email:');
+    if (!email) return;
+    try {
+      await superAdminService.forcePasswordReset(email);
+      showToast('Password reset email sent', 'success');
+    } catch (error) {
+      showToast('Failed to reset password', 'error');
+    }
+  };
+
+  const handleDisableAccount = async () => {
+    const userId = prompt('Enter user ID:');
+    if (!userId) return;
+    try {
+      await superAdminService.disableAccount(parseInt(userId));
+      showToast('Account disabled', 'success');
+    } catch (error) {
+      showToast('Failed to disable account', 'error');
+    }
+  };
+
+  const handleUpdateConfig = async () => {
+    try {
+      await superAdminService.updatePlatformConfig(platformConfig);
+      showToast('Configuration updated', 'success');
+    } catch (error) {
+      showToast('Failed to update configuration', 'error');
+    }
+  };
+
+  const handleToggleMaintenance = async (enabled) => {
+    if (!confirm(`${enabled ? 'Enable' : 'Disable'} maintenance mode?`)) return;
+    try {
+      await superAdminService.toggleMaintenanceMode(enabled);
+      showToast(`Maintenance mode ${enabled ? 'enabled' : 'disabled'}`, 'success');
+      loadPlatformConfig();
+    } catch (error) {
+      showToast('Failed to toggle maintenance mode', 'error');
+    }
+  };
+
+  const handleRetryFailedJobs = async () => {
+    if (!confirm('Retry all failed jobs?')) return;
+    try {
+      const result = await superAdminService.retryFailedJobs();
+      showToast(result.message, 'success');
+    } catch (error) {
+      showToast('Failed to retry jobs', 'error');
+    }
+  };
+
+  // Helper Functions
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   };
 
-  // Export data to CSV
-  const exportToCSV = (data, filename) => {
-    const headers = Object.keys(data[0]);
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row => headers.map(header => JSON.stringify(row[header] || '')).join(','))
-    ].join('\n');
+  const openModal = (type, data = {}) => {
+    setModalType(type);
+    setModalData(data);
+    setShowModal(true);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+  const closeModal = () => {
+    setShowModal(false);
+    setModalType('');
+    setModalData({});
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+    showToast('Data refreshed', 'success');
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString('en-US', { 
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const exportCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      showToast('No data to export', 'error');
+      return;
+    }
+    const headers = Object.keys(data[0]);
+    const csv = [headers.join(','), ...data.map(r => headers.map(h => JSON.stringify(r[h] || '')).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+    showToast('Exported successfully', 'success');
   };
 
-  const handleExportTenants = () => {
-    exportToCSV(tenants, 'tenants');
-    alert('Tenants exported successfully');
-  };
-
-  const filteredTenants = tenants.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         t.subdomain.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || t.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
-  // Tab: Platform Overview
-  const renderOverview = () => (
-    <div className="space-y-6">
-      {/* Platform Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard icon={<Building2 />} title="Total Tenants" value={platformStats.totalTenants} subtitle={`${platformStats.activeTenants} active`} trend="+8%" color="blue" />
-        <StatCard icon={<Users />} title="Total Users" value={platformStats.totalUsers.toLocaleString()} subtitle={`${platformStats.dau} active today`} trend="+12%" color="green" />
-        <StatCard icon={<DollarSign />} title="MRR" value={`$${platformStats.mrr.toLocaleString()}`} subtitle="Monthly recurring" trend="+15%" color="purple" />
-        <StatCard icon={<Activity />} title="API Calls" value={`${(platformStats.apiCalls / 1000000).toFixed(1)}M`} subtitle="Last 30 days" trend="+5%" color="orange" />
-      </div>
-
-      {/* System Health */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Server className="w-5 h-5 text-blue-600" />
-            System Health
-          </h3>
-          <div className="space-y-4">
-            <HealthMetric label="Uptime" value={`${platformStats.uptime}%`} status="good" />
-            <HealthMetric label="Error Rate" value={`${platformStats.errorRate}%`} status="good" />
-            <HealthMetric label="Database" value="Healthy" status="good" />
-            <HealthMetric label="Storage Used" value={`${platformStats.storageUsed} GB`} status="good" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-green-600" />
-            Growth Metrics
-          </h3>
-          <div className="space-y-4">
-            <GrowthMetric label="New Tenants (30d)" value="23" change="+18%" />
-            <GrowthMetric label="Total Revenue" value={`$${platformStats.totalRevenue.toLocaleString()}`} change="+15%" />
-            <GrowthMetric label="MAU" value={platformStats.mau.toLocaleString()} change="+12%" />
-            <GrowthMetric label="DAU" value={platformStats.dau.toLocaleString()} change="+8%" />
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Platform Activity */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Platform Activity</h3>
-        <div className="space-y-3">
-          <ActivityItem icon={<Plus className="w-4 h-4 text-green-600" />} text="New tenant registered: TechStart Inc" time="2 hours ago" />
-          <ActivityItem icon={<AlertTriangle className="w-4 h-4 text-orange-600" />} text="Tenant suspended due to payment failure: StartupHub" time="5 hours ago" />
-          <ActivityItem icon={<TrendingUp className="w-4 h-4 text-blue-600" />} text="Acme Corp upgraded to PRO plan" time="1 day ago" />
-          <ActivityItem icon={<Lock className="w-4 h-4 text-red-600" />} text="Security alert: 3 failed login attempts detected" time="2 days ago" />
-        </div>
+  // Small UI helpers
+  const LoadingState = () => (
+    <div className="bg-white rounded-lg shadow p-6 text-center">
+      <div className="flex items-center justify-center gap-3">
+        <RefreshCw className="w-5 h-5 text-gray-500 animate-spin" />
+        <span className="text-gray-600 font-medium">Loading...</span>
       </div>
     </div>
   );
 
-  // Tab: Tenant Management
-  const renderTenants = () => (
-    <div className="space-y-6">
-      {/* Search & Actions */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex-1 w-full md:w-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search tenants by name or subdomain..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+  const EmptyState = ({ message }) => (
+    <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">{message}</div>
+  );
+
+  const styles = {
+    primaryBtn: 'px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500',
+    secondaryBtn: 'px-3 py-2 border rounded-md bg-white hover:bg-gray-50',
+    subtleBtn: 'px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200',
+    card: 'bg-white rounded-lg shadow-sm p-6',
+    tabActive: 'bg-blue-600 text-white',
+    tabInactive: 'bg-white border',
+    iconBtnSmall: 'w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100'
+  };
+
+  const IconButton = ({ onClick, icon, title, variant = 'default' }) => (
+    <button onClick={onClick} title={title} className={styles.iconBtnSmall}>{icon}</button>
+  );
+
+  const HealthRow = ({ label, value, good }) => (
+    <div className="flex justify-between items-center">
+      <div className="text-sm text-gray-600">{label}</div>
+      <div className={`text-sm font-medium ${good ? 'text-green-600' : 'text-red-600'}`}>{value}</div>
+    </div>
+  );
+
+  const MetricRow = ({ label, value }) => (
+    <div className="flex justify-between items-center">
+      <div className="text-sm text-gray-600">{label}</div>
+      <div className="text-sm font-medium">{value}</div>
+    </div>
+  );
+
+  // Modal UI
+  const Modal = ({ open, onClose, children }) => {
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div />
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          </div>
+          <div className="p-6">{children}</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Simple toast based on local state
+  const ToastUI = () => {
+    if (!toast.show) return null;
+    const bg = toast.type === 'success' ? 'bg-green-500' : toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    return (
+      <div className={`fixed right-6 top-6 z-50 p-4 rounded-lg shadow-lg ${bg} text-white max-w-sm`}> 
+        <div className="flex items-start gap-3">
+          <div className="text-xl">{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ'}</div>
+          <div className="text-sm font-medium">{toast.message}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const filteredTenants = tenants.filter(t => {
+    const match = t.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                  t.subdomain?.toLowerCase().includes(searchTerm.toLowerCase());
+    const filter = filterStatus === 'all' || t.status === filterStatus;
+    return match && filter;
+  });
+
+  // RENDER FUNCTIONS
+  const renderOverview = () => {
+    if (!platformStats || !platformHealth) return <LoadingState />;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatsCard icon={<Building2 />} title="Total Tenants" value={platformStats.totalTenants || 0} 
+            trendValue={`${platformStats.activeTenants || 0} active`} color="blue" />
+          <StatsCard icon={<Users />} title="Total Users" value={(platformStats.totalUsers || 0).toLocaleString()} 
+            trendValue={`${platformStats.dau || 0} today`} color="green" />
+          <StatsCard icon={<DollarSign />} title="MRR" value={`$${(platformStats.mrr || 0).toLocaleString()}`} 
+            trendValue="Monthly" color="purple" />
+          <StatsCard icon={<Activity />} title="API Calls" value={`${((platformStats.totalApiCalls || 0)/1e6).toFixed(1)}M`} 
+            trendValue="Last 30 days" color="orange" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Server className="w-5 h-5 text-blue-600" />System Health
+            </h3>
+            <div className="space-y-3">
+              <HealthRow label="Status" value={platformHealth.status || 'Unknown'} good={platformHealth.status === 'healthy'} />
+              <HealthRow label="Uptime" value={`${platformStats.uptime || 0}%`} good={platformStats.uptime > 99} />
+              <HealthRow label="Error Rate" value={`${platformStats.errorRate || 0}%`} good={platformStats.errorRate < 1} />
+              <HealthRow label="Storage" value={`${(platformStats.totalStorageGB || 0).toFixed(2)} GB`} good={true} />
+              <HealthRow label="Database" value={platformHealth.database || 'Unknown'} good={platformHealth.database === 'connected'} />
             </div>
           </div>
-          <div className="flex gap-2">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="TRIAL">Trial</option>
-              <option value="SUSPENDED">Suspended</option>
-            </select>
-            <button 
-              onClick={handleExportTenants}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-              title="Export to CSV"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button 
-              onClick={() => setShowCreateTenantModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              New Tenant
-            </button>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />Tenant Breakdown
+            </h3>
+            <div className="space-y-3">
+              <MetricRow label="Active" value={platformStats.activeTenants || 0} />
+              <MetricRow label="Trial" value={platformStats.trialTenants || 0} />
+              <MetricRow label="Suspended" value={platformStats.suspendedTenants || 0} />
+              <MetricRow label="DAU" value={platformStats.dau || 0} />
+              <MetricRow label="MAU" value={platformStats.mau || 0} />
+            </div>
           </div>
         </div>
       </div>
+    );
+  };
 
-      {/* Tenants Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
+  const renderTenants = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-300" />
+        </div>
+        <div className="flex gap-2">
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border rounded-lg">
+            <option value="all">All</option>
+            <option value="ACTIVE">Active</option>
+            <option value="TRIAL">Trial</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+          <button onClick={() => exportCSV(tenants, 'tenants')} 
+            className="px-4 py-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2">
+            <Download className="w-4 h-4" />Export
+          </button>
+          <button onClick={() => openModal('createTenant')} 
+            className={`${styles.primaryBtn} flex items-center gap-2`}>
+            <Plus className="w-4 h-4" />New
+          </button>
+        </div>
+      </div>
+
+      {loading ? <LoadingState /> : filteredTenants.length === 0 ? 
+        <EmptyState message="No tenants found" /> :
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -189,546 +507,383 @@ const SuperAdminDashboard = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Storage</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">API Calls</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Active</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredTenants.map(tenant => (
-              <tr key={tenant.id} className="hover:bg-gray-50">
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredTenants.map(t => (
+              <tr key={t.id} className="even:bg-gray-50 hover:bg-gray-100">
                 <td className="px-6 py-4">
-                  <div>
-                    <div className="font-medium text-gray-900">{tenant.name}</div>
-                    <div className="text-sm text-gray-500">{tenant.subdomain}.platform.com</div>
-                  </div>
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-sm text-gray-500">{t.subdomain}.platform.com</div>
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 text-xs rounded-full ${
-                    tenant.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-                    tenant.status === 'TRIAL' ? 'bg-blue-100 text-blue-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {tenant.status}
-                  </span>
+                    t.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                    t.status === 'TRIAL' ? 'bg-blue-100 text-blue-800' :
+                    'bg-red-100 text-red-800'}`}>{t.status}</span>
                 </td>
-                <td className="px-6 py-4 text-sm">{tenant.plan}</td>
-                <td className="px-6 py-4 text-sm">{tenant.userCount}</td>
-                <td className="px-6 py-4 text-sm">{tenant.storage} GB</td>
-                <td className="px-6 py-4 text-sm">{tenant.apiCalls.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{tenant.lastActive}</td>
-                                  <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => alert('View tenant details')}
-                      className="p-1 text-blue-600 hover:bg-blue-50 rounded" 
-                      title="View Details"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    {tenant.status === 'ACTIVE' ? (
-                      <button 
-                        onClick={() => handleSuspendTenant(tenant.id)}
-                        className="p-1 text-orange-600 hover:bg-orange-50 rounded" 
-                        title="Suspend"
-                      >
-                        <Pause className="w-4 h-4" />
-                      </button>
-                    ) : tenant.status === 'SUSPENDED' ? (
-                      <button 
-                        onClick={() => handleActivateTenant(tenant.id)}
-                        className="p-1 text-green-600 hover:bg-green-50 rounded" 
-                        title="Activate"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
-                    ) : null}
-                    <button 
-                      onClick={() => handleImpersonate(tenant.id)}
-                      className="p-1 text-purple-600 hover:bg-purple-50 rounded" 
-                      title="Impersonate Owner"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteTenant(tenant.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded" 
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                <td className="px-6 py-4">
+                  <select value={t.plan || ''} onChange={(e) => handleAssignPlan(t.id, e.target.value)}
+                    className="text-sm border rounded px-2 py-1">
+                    <option value="">Select Plan</option>
+                    {plans.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </td>
+                <td className="px-6 py-4 text-sm">{t.userCount || 0}</td>
+                <td className="px-6 py-4 text-sm">{(t.storageUsedGB || 0).toFixed(2)} GB</td>
+                <td className="px-6 py-4 text-sm">{(t.apiCallCount || 0).toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{formatDate(t.createdAt)}</td>
+                <td className="px-6 py-4">
+                  <div className="flex gap-1">
+                    {t.status === 'ACTIVE' ? 
+                      <IconButton onClick={() => handleSuspendTenant(t.id)} icon={<Pause className="w-4 h-4" />} 
+                        title="Suspend" color="orange" /> :
+                      t.status === 'SUSPENDED' ?
+                      <IconButton onClick={() => handleActivateTenant(t.id)} icon={<Play className="w-4 h-4" />} 
+                        title="Activate" color="green" /> : null}
+                    <IconButton onClick={() => handleImpersonate(t.id)} icon={<UserCheck className="w-4 h-4" />} 
+                      title="Impersonate" color="purple" />
+                    <IconButton onClick={() => handleForceLogout(t.id)} icon={<Power className="w-4 h-4" />} 
+                      title="Force Logout" color="yellow" />
+                    <IconButton onClick={() => handleDeleteTenant(t.id)} icon={<Trash2 className="w-4 h-4" />} 
+                      title="Delete" color="red" />
                   </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 
-  // Tab: Subscription Plans
-  const renderPlans = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Subscription Plans</h2>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Plan
-        </button>
-      </div>
+  const renderPlans = () => {
+    if (loading) return <LoadingState />;
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-semibold">Subscription Plans</h2>
+          <button onClick={() => openModal('createPlan')} 
+            className={`${styles.primaryBtn} flex items-center gap-2`}>
+            <Plus className="w-4 h-4" />Create Plan
+          </button>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {plans.map(plan => (
-          <div key={plan.id} className="bg-white rounded-lg shadow p-6 relative">
-            <div className="absolute top-4 right-4">
-              <button className="p-1 text-gray-400 hover:text-gray-600">
-                <Edit className="w-4 h-4" />
-              </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {plans.map((p, i) => (
+            <div key={i} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-lg font-bold">{p.name}</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-blue-600">${p.price || 0}</span>
+                <span className="text-gray-500">/mo</span>
+              </div>
+              <div className="space-y-2 text-sm text-gray-600 mb-4">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  {p.maxUsers === -1 ? 'Unlimited' : p.maxUsers} users
+                </div>
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  {p.maxStorage === -1 ? 'Unlimited' : `${p.maxStorage} GB`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  {p.maxApiCalls === -1 ? 'Unlimited' : p.maxApiCalls.toLocaleString()} calls
+                </div>
+              </div>
+              <div className="pt-4 border-t space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Tenants:</span>
+                  <span className="font-semibold">{p.tenantCount || 0}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Revenue:</span>
+                  <span className="font-semibold">${((p.price || 0) * (p.tenantCount || 0)).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{plan.name}</h3>
-            <div className="mb-4">
-              <span className="text-3xl font-bold text-blue-600">${plan.price}</span>
-              <span className="text-gray-500">/month</span>
-            </div>
-            <div className="space-y-2 text-sm text-gray-600 mb-4">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                {plan.maxUsers === -1 ? 'Unlimited' : plan.maxUsers} users
-              </div>
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                {plan.maxStorage === -1 ? 'Unlimited' : `${plan.maxStorage} GB`} storage
-              </div>
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                {plan.maxApiCalls === -1 ? 'Unlimited' : plan.maxApiCalls.toLocaleString()} API calls
-              </div>
-            </div>
-            <div className="pt-4 border-t">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Active tenants:</span>
-                <span className="font-semibold">{plan.tenantCount}</span>
-              </div>
+          ))}
+        </div>
+
+        {subscriptions && subscriptions.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-purple-600" />
+              Active Subscriptions
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {subscriptions.map((s, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm">{s.tenantName}</td>
+                      <td className="px-4 py-3 text-sm font-medium">{s.plan}</td>
+                      <td className="px-4 py-3 text-sm">${s.revenue}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          s.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>{s.isActive ? 'Active' : 'Inactive'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{formatDate(s.startDate)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{formatDate(s.endDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        ))}
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
-  // Tab: Global Analytics
-  const renderAnalytics = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Revenue</h3>
-          <p className="text-3xl font-bold text-gray-900">${platformStats.totalRevenue.toLocaleString()}</p>
-          <p className="text-sm text-green-600 mt-1">+15% from last month</p>
+  const renderAnalytics = () => {
+    if (loading || !globalAnalytics) return <LoadingState />;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Revenue</h3>
+            <p className="text-3xl font-bold text-gray-900">${(globalAnalytics.totalRevenue || 0).toLocaleString()}</p>
+            <p className="text-sm text-green-600 mt-1">MRR: ${(globalAnalytics.mrr || 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Users</h3>
+            <p className="text-3xl font-bold text-gray-900">{(globalAnalytics.totalUsers || 0).toLocaleString()}</p>
+            <p className="text-sm text-blue-600 mt-1">MAU: {(globalAnalytics.mau || 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-600 mb-2">API Usage</h3>
+            <p className="text-3xl font-bold text-gray-900">{((globalAnalytics.apiCalls || 0)/1e6).toFixed(2)}M</p>
+            <p className="text-sm text-orange-600 mt-1">Last 30 days</p>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Active Users</h3>
-          <p className="text-3xl font-bold text-gray-900">{platformStats.mau.toLocaleString()}</p>
-          <p className="text-sm text-green-600 mt-1">+12% growth</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">API Usage</h3>
-          <p className="text-3xl font-bold text-gray-900">{(platformStats.apiCalls / 1000000).toFixed(1)}M</p>
-          <p className="text-sm text-green-600 mt-1">+5% increase</p>
-        </div>
+
+        {revenueAnalytics && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-purple-600" />Revenue Trends
+            </h3>
+            <div className="text-sm text-gray-600 mb-2">Total for period: <strong>${(revenueAnalytics.total || 0).toLocaleString()}</strong></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(revenueAnalytics.byMonth || []).map((m, i) => (
+                <div key={i} className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-500">{m.month}</div>
+                  <div className="font-bold">${m.amount.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    );
+  };
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Platform Usage (Last 30 Days)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <UsageMetric label="Storage Usage" value={`${platformStats.storageUsed} GB`} max="1000 GB" percentage={45.7} />
-          <UsageMetric label="API Calls" value={`${(platformStats.apiCalls / 1000000).toFixed(1)}M`} max="10M" percentage={45.7} />
-          <UsageMetric label="Daily Active Users" value={platformStats.dau.toLocaleString()} max={platformStats.totalUsers.toLocaleString()} percentage={36.5} />
-          <UsageMetric label="Monthly Active Users" value={platformStats.mau.toLocaleString()} max={platformStats.totalUsers.toLocaleString()} percentage={84.5} />
-        </div>
-      </div>
-    </div>
-  );
-
-  // Tab: Security & Compliance
   const renderSecurity = () => (
     <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><Shield className="w-5 h-5 text-red-600" />Security Alerts</h3>
+        {securityAlerts.length === 0 ? <EmptyState message="No alerts" /> : (
+          <ul className="space-y-2">
+            {securityAlerts.map((a, i) => (
+              <li key={i} className="flex items-start gap-3 p-3 border rounded">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-1" />
+                <div>
+                  <div className="font-medium">{a.title}</div>
+                  <div className="text-sm text-gray-500">{a.description}</div>
+                  <div className="text-xs text-gray-400 mt-1">{formatDate(a.timestamp)}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Lock className="w-5 h-5 text-red-600" />
-            Security Alerts
-          </h3>
-          <div className="space-y-3">
-            <SecurityAlert type="warning" text="15 failed login attempts detected" time="2 hours ago" />
-            <SecurityAlert type="info" text="New IP access from unusual location" time="5 hours ago" />
-            <SecurityAlert type="success" text="All systems secure" time="Ongoing" />
-          </div>
+          <h3 className="text-lg font-semibold mb-3">Login History</h3>
+          {(!loginHistory || loginHistory.length === 0) ? <EmptyState message="No login history" /> : (
+            <div className="space-y-2 text-sm text-gray-700">
+              {loginHistory.map((l, i) => (
+                <div key={i} className="flex justify-between">
+                  <div>{l.userEmail}</div>
+                  <div className="text-gray-500">{formatDate(l.timestamp)}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-blue-600" />
-            Login Activity (24h)
-          </h3>
-          <div className="space-y-3">
-            <LoginStat label="Total Logins" value="1,234" />
-            <LoginStat label="Failed Attempts" value="23" />
-            <LoginStat label="Unique IPs" value="856" />
-            <LoginStat label="Suspicious Activity" value="2" />
-          </div>
+          <h3 className="text-lg font-semibold mb-3">Audit Logs</h3>
+          {auditLogs.length === 0 ? <EmptyState message="No audit logs" /> : (
+            <div className="space-y-2 text-sm text-gray-700 max-h-64 overflow-auto">
+              {auditLogs.map((a, i) => (
+                <div key={i} className="text-xs text-gray-600 border-b py-2">{formatDate(a.timestamp)} — {a.action} by {a.actor}</div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 
-  // Tab: Platform Configuration
-  const renderPlatformConfig = () => (
+  const renderConfig = () => (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">General Settings</h3>
-        <div className="space-y-4">
-          <ConfigInput label="Platform Name" value="SaaS Platform" />
-          <ConfigInput label="Support Email" value="support@platform.com" />
-          <ConfigInput label="Default Subdomain" value=".platform.com" />
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2"><Settings className="w-5 h-5 text-gray-700" />Platform Configuration</h3>
+          <div className="flex gap-2">
+            <button onClick={() => handleToggleMaintenance(!platformConfig?.maintenance)} className={`${styles.secondaryBtn} bg-yellow-500 text-white`}>{platformConfig?.maintenance ? 'Disable Maintenance' : 'Enable Maintenance'}</button>
+            <button onClick={handleUpdateConfig} className={`${styles.primaryBtn}`}>Save</button>
+          </div>
         </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Platform Limits</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ConfigInput label="Max File Upload (MB)" type="number" value="10" />
-          <ConfigInput label="API Rate Limit (/hour)" type="number" value="1000" />
-          <ConfigInput label="Session Timeout (min)" type="number" value="120" />
-          <ConfigInput label="Trial Period (days)" type="number" value="14" />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Feature Flags</h3>
-        <div className="space-y-4">
-          <FeatureToggle label="Allow New Registrations" enabled={true} />
-          <FeatureToggle label="Maintenance Mode" enabled={false} />
-          <FeatureToggle label="Email Notifications" enabled={true} />
-          <FeatureToggle label="Webhooks" enabled={true} />
-        </div>
+        {!platformConfig ? <EmptyState message="No configuration" /> : (
+          <div className="space-y-3 text-sm text-gray-700">
+            <div className="flex justify-between"><div>Maintenance</div><div>{platformConfig.maintenance ? 'Enabled' : 'Disabled'}</div></div>
+            <div className="flex justify-between"><div>Feature Flags</div><div>{Object.keys(platformConfig.featureFlags || {}).length} flags</div></div>
+            <div className="flex justify-between"><div>Default Plan</div><div>{platformConfig.defaultPlan || '—'}</div></div>
+          </div>
+        )}
       </div>
     </div>
   );
 
-  // Tab: Integrations
   const renderIntegrations = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <IntegrationCard
-          icon={<CreditCard className="w-6 h-6" />}
-          name="Payment Gateway"
-          description="Stripe, Razorpay"
-          status="connected"
-          color="green"
-        />
-        <IntegrationCard
-          icon={<Mail className="w-6 h-6" />}
-          name="Email Provider"
-          description="SendGrid, AWS SES"
-          status="connected"
-          color="blue"
-        />
-        <IntegrationCard
-          icon={<Bell className="w-6 h-6" />}
-          name="SMS Provider"
-          description="Twilio, SNS"
-          status="not-configured"
-          color="gray"
-        />
-        <IntegrationCard
-          icon={<Globe className="w-6 h-6" />}
-          name="OAuth Providers"
-          description="Google, GitHub"
-          status="connected"
-          color="purple"
-        />
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-3"><Zap className="w-5 h-5 text-indigo-600" />Integrations</h3>
+        {!integrations ? <EmptyState message="No integrations configured" /> : (
+          <div className="space-y-3 text-sm text-gray-700">
+            <div className="flex justify-between"><div>Email Provider</div><div>{integrations.email?.provider || 'Not configured'}</div></div>
+            <div className="flex justify-between"><div>Payment Gateway</div><div>{integrations.payment?.provider || 'Not configured'}</div></div>
+          </div>
+        )}
       </div>
     </div>
   );
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-8 h-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Super Admin</h1>
-                <p className="text-sm text-gray-500">Platform Management Console</p>
-              </div>
-            </div>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </button>
+  const renderMonitoring = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2"><Code className="w-5 h-5 text-gray-700" />System Errors</h3>
+          <div className="flex gap-2">
+            <button onClick={() => handleRetryFailedJobs()} className={`${styles.primaryBtn}`}>Retry Jobs</button>
+            <button onClick={() => exportCSV(systemErrors, 'system_errors')} className={`${styles.secondaryBtn}`}>Export</button>
           </div>
         </div>
-      </header>
+        {systemErrors.length === 0 ? <EmptyState message="No errors" /> : (
+          <div className="space-y-2 text-sm text-gray-700 max-h-64 overflow-auto">
+            {systemErrors.map((e, i) => (
+              <div key={i} className="border-b py-2">
+                <div className="font-medium">{e.message}</div>
+                <div className="text-xs text-gray-500">{formatDate(e.timestamp)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Navigation */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex gap-6 overflow-x-auto">
-            <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<BarChart3 />} label="Overview" />
-            <TabButton active={activeTab === 'tenants'} onClick={() => setActiveTab('tenants')} icon={<Building2 />} label="Tenants" />
-            <TabButton active={activeTab === 'plans'} onClick={() => setActiveTab('plans')} icon={<CreditCard />} label="Plans" />
-            <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<Activity />} label="Analytics" />
-            <TabButton active={activeTab === 'security'} onClick={() => setActiveTab('security')} icon={<Lock />} label="Security" />
-            <TabButton active={activeTab === 'config'} onClick={() => setActiveTab('config')} icon={<Settings />} label="Config" />
-            <TabButton active={activeTab === 'integrations'} onClick={() => setActiveTab('integrations')} icon={<Zap />} label="Integrations" />
-          </nav>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-3">Backend Logs</h3>
+        <pre className="bg-gray-50 p-4 rounded max-h-64 overflow-auto text-xs">{backendLogs.join('\n')}</pre>
+      </div>
+    </div>
+  );
+
+  // Main render
+  return (
+    <div className="max-w-screen-xl mx-auto p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Platform Admin</h1>
+            <div className="text-sm text-gray-500">Super admin overview and controls</div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleRefresh} className={`${styles.subtleBtn} flex items-center gap-2`}><RefreshCw className="w-4 h-4" />Refresh</button>
+            <button onClick={() => exportCSV(tenants, 'tenants')} className={`${styles.secondaryBtn} flex items-center gap-2`}><Download className="w-4 h-4" />Export</button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-600">Signed in as <strong>{user?.email}</strong></div>
+          <button onClick={logout} className="px-3 py-2 bg-red-500 text-white rounded">Logout</button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6">
+        <nav className="flex gap-2 flex-wrap">
+          {['overview','tenants','plans','analytics','security','config','integrations','monitoring'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium ${activeTab===tab ? styles.tabActive : styles.tabInactive}`}>{tab.charAt(0).toUpperCase()+tab.slice(1)}</button>
+          ))}
+        </nav>
+      </div>
+
+      <div>
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'tenants' && renderTenants()}
         {activeTab === 'plans' && renderPlans()}
         {activeTab === 'analytics' && renderAnalytics()}
         {activeTab === 'security' && renderSecurity()}
-        {activeTab === 'config' && renderPlatformConfig()}
+        {activeTab === 'config' && renderConfig()}
         {activeTab === 'integrations' && renderIntegrations()}
-      </main>
-
-      {/* Create Tenant Modal */}
-      {showCreateTenantModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold mb-4">Create New Tenant</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  value={newTenant.name}
-                  onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Acme Corporation"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Subdomain
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newTenant.subdomain}
-                    onChange={(e) => setNewTenant({ ...newTenant, subdomain: e.target.value.toLowerCase() })}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="acme"
-                  />
-                  <span className="text-sm text-gray-500">.platform.com</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Use lowercase letters, numbers, and hyphens only
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowCreateTenantModal(false);
-                  setNewTenant({ name: '', subdomain: '' });
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateTenant}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Create Tenant
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
-      {toast.show && (
-        <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
-          <div className={`px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 ${
-            toast.type === 'success' ? 'bg-green-600 text-white' :
-            toast.type === 'error' ? 'bg-red-600 text-white' :
-            'bg-blue-600 text-white'
-          }`}>
-            {toast.type === 'success' && <CheckCircle className="w-5 h-5" />}
-            {toast.type === 'error' && <XCircle className="w-5 h-5" />}
-            <span className="font-medium">{toast.message}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Components
-const StatCard = ({ icon, title, value, subtitle, trend, color }) => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <div className="flex items-center justify-between mb-4">
-      <div className={`p-3 rounded-lg bg-${color}-100 text-${color}-600`}>{icon}</div>
-      <span className="text-green-600 text-sm font-medium">{trend}</span>
-    </div>
-    <p className="text-sm text-gray-600 mb-1">{title}</p>
-    <p className="text-2xl font-bold text-gray-900">{value}</p>
-    <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-  </div>
-);
-
-const HealthMetric = ({ label, value, status }) => (
-  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-    <span className="text-sm text-gray-700">{label}</span>
-    <div className="flex items-center gap-2">
-      <span className="text-sm font-semibold">{value}</span>
-      {status === 'good' ? <CheckCircle className="w-4 h-4 text-green-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-    </div>
-  </div>
-);
-
-const GrowthMetric = ({ label, value, change }) => (
-  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-    <span className="text-sm text-gray-700">{label}</span>
-    <div className="text-right">
-      <div className="text-sm font-semibold">{value}</div>
-      <div className="text-xs text-green-600">{change}</div>
-    </div>
-  </div>
-);
-
-const ActivityItem = ({ icon, text, time }) => (
-  <div className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg">
-    <div className="mt-1">{icon}</div>
-    <div className="flex-1">
-      <p className="text-sm text-gray-900">{text}</p>
-      <p className="text-xs text-gray-500 mt-1">{time}</p>
-    </div>
-  </div>
-);
-
-const UsageMetric = ({ label, value, max, percentage }) => (
-  <div>
-    <div className="flex justify-between text-sm mb-2">
-      <span className="text-gray-700">{label}</span>
-      <span className="text-gray-600">{value} / {max}</span>
-    </div>
-    <div className="w-full bg-gray-200 rounded-full h-2">
-      <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${percentage}%` }} />
-    </div>
-  </div>
-);
-
-const SecurityAlert = ({ type, text, time }) => {
-  const colors = {
-    warning: 'text-orange-600 bg-orange-50',
-    info: 'text-blue-600 bg-blue-50',
-    success: 'text-green-600 bg-green-50'
-  };
-  return (
-    <div className={`p-3 rounded-lg ${colors[type]}`}>
-      <p className="text-sm font-medium">{text}</p>
-      <p className="text-xs mt-1">{time}</p>
-    </div>
-  );
-};
-
-const LoginStat = ({ label, value }) => (
-  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-    <span className="text-sm text-gray-700">{label}</span>
-    <span className="text-sm font-semibold text-gray-900">{value}</span>
-  </div>
-);
-
-const TabButton = ({ active, onClick, icon, label }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-2 px-3 py-3 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-      active
-        ? 'border-blue-600 text-blue-600'
-        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-    }`}
-  >
-    {icon}
-    {label}
-  </button>
-);
-
-const ConfigInput = ({ label, type = 'text', value }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-    <input
-      type={type}
-      defaultValue={value}
-      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-    />
-  </div>
-);
-
-const FeatureToggle = ({ label, enabled }) => {
-  const [isEnabled, setIsEnabled] = useState(enabled);
-
-  return (
-    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-      <span className="text-sm font-medium text-gray-900">{label}</span>
-      <button
-        onClick={() => setIsEnabled(!isEnabled)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          isEnabled ? 'bg-blue-600' : 'bg-gray-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            isEnabled ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
-    </div>
-  );
-};
-
-const IntegrationCard = ({ icon, name, description, status, color }) => {
-  const statusColors = {
-    connected: 'bg-green-100 text-green-800',
-    'not-configured': 'bg-gray-100 text-gray-800',
-    error: 'bg-red-100 text-red-800'
-  };
-
-  const iconColors = {
-    green: 'bg-green-100 text-green-600',
-    blue: 'bg-blue-100 text-blue-600',
-    purple: 'bg-purple-100 text-purple-600',
-    orange: 'bg-orange-100 text-orange-600',
-    gray: 'bg-gray-100 text-gray-600'
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div className={`p-3 rounded-lg ${iconColors[color]}`}>
-          {icon}
-        </div>
-        <span className={`px-3 py-1 text-xs rounded-full ${statusColors[status]}`}>
-          {status === 'connected' ? 'Connected' : status === 'not-configured' ? 'Not Configured' : 'Error'}
-        </span>
+        {activeTab === 'monitoring' && renderMonitoring()}
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-1">{name}</h3>
-      <p className="text-sm text-gray-500 mb-4">{description}</p>
-      <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-        Configure
-      </button>
+
+      <Modal open={showModal} onClose={closeModal}>
+        {modalType === 'createTenant' && (
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Create Tenant</h3>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input value={modalData.name || ''} onChange={(e) => setModalData({...modalData, name: e.target.value})} placeholder="Name" className="block w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-sm font-medium text-gray-700">Subdomain</label>
+              <input value={modalData.subdomain || ''} onChange={(e) => setModalData({...modalData, subdomain: e.target.value})} placeholder="Subdomain" className="block w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" />
+              <div className="flex justify-end gap-2">
+                <button onClick={closeModal} className={`${styles.secondaryBtn}`}>Cancel</button>
+                <button onClick={handleCreateTenant} className={`${styles.primaryBtn}`}>Create</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modalType === 'createPlan' && (
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Create Plan</h3>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input value={modalData.name || ''} onChange={(e) => setModalData({...modalData, name: e.target.value})} placeholder="Name" className="block w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-sm font-medium text-gray-700">Price</label>
+              <input value={modalData.price || ''} onChange={(e) => setModalData({...modalData, price: parseFloat(e.target.value || 0)})} placeholder="Price" type="number" className="block w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" />
+              <div className="flex justify-end gap-2">
+                <button onClick={closeModal} className={`${styles.secondaryBtn}`}>Cancel</button>
+                <button onClick={handleCreatePlan} className={`${styles.primaryBtn}`}>Create</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <ToastUI />
     </div>
   );
-};
 
-export default SuperAdminDashboard;
+    };
+
+    export default SuperAdminDashboard;

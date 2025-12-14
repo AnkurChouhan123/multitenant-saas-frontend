@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - SUPER ADMIN ENABLED VERSION
+// frontend/src/App.jsx - FIXED SUPER ADMIN ROUTE
 
 import React from "react";
 import {
@@ -19,7 +19,6 @@ import CommandPalette from "./components/common/CommandPalette";
 // Layout
 import MainLayout from "./components/layout/MainLayout";
 
-
 // Auth Pages
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -38,17 +37,21 @@ import WebhooksPage from "./pages/WebhooksPage";
 import FileManagerPage from "./pages/FileManagerPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
-
 // ==========================================================
 // 🔐 PROTECTED ROUTES FOR TENANT USERS
 // ==========================================================
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // If user is SUPER_ADMIN and trying to access tenant routes, redirect to super-admin
+  if (user?.role === "SUPER_ADMIN" && location.pathname !== "/super-admin") {
+    return <Navigate to="/super-admin" replace />;
   }
 
   return (
@@ -67,14 +70,26 @@ const ProtectedRoute = ({ children }) => {
 const SuperAdminRoute = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
 
+  console.log('🔒 SuperAdminRoute Check:', { 
+    isAuthenticated, 
+    userRole: user?.role,
+    user: user 
+  });
+
+  // Not authenticated - go to login
   if (!isAuthenticated) {
+    console.log('❌ Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  // Authenticated but not SUPER_ADMIN - go to regular dashboard
   if (user?.role !== "SUPER_ADMIN") {
+    console.log('❌ Not SUPER_ADMIN, redirecting to dashboard');
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Authenticated and SUPER_ADMIN - allow access
+  console.log('✅ SUPER_ADMIN access granted');
   return <>{children}</>;
 };
 
@@ -89,17 +104,23 @@ function App() {
           <AuthProvider>
             <ToastProvider>
               <Routes>
-
                 {/* PUBLIC ROUTES */}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-              
+                {/* SUPER ADMIN ROUTE - Protected */}
+                <Route
+                  path="/super-admin"
+                  element={
+                    <SuperAdminRoute>
+                      <SuperAdminDashboard />
+                    </SuperAdminRoute>
+                  }
+                />
 
-                
-
+                {/* TENANT PROTECTED ROUTES */}
                 <Route
                   path="/dashboard"
                   element={
@@ -184,8 +205,6 @@ function App() {
                 {/* DEFAULT ROUTES */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
-                <Route path="/super-admin" element={<SuperAdminDashboard />} />
-
               </Routes>
             </ToastProvider>
           </AuthProvider>
