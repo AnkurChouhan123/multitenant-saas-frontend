@@ -45,10 +45,10 @@ const DashboardPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-950 dark:to-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="inline-flex items-center justify-center">
-            <svg className="animate-spin h-16 w-16 text-purple-500 dark:text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-16 w-16 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -61,13 +61,13 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 sm:py-6 gap-4 sm:gap-0">
             <div className="w-full sm:w-auto">
-              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white transition-opacity duration-200">
                 Welcome back, {user.firstName}! 👋
               </h1>
               <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">{user.tenantName}</p>
@@ -83,7 +83,7 @@ const DashboardPage = () => {
               </button>
               <button
                 onClick={logout}
-                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-lg hover:from-red-600 hover:to-red-700 dark:hover:from-red-700 dark:hover:to-red-800 transition transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Logout</span>
@@ -98,23 +98,25 @@ const DashboardPage = () => {
         {/* Quick Actions */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">⚡ Quick Actions</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">Quick Actions</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[
-              { icon: Users, label: 'Manage Users', desc: 'Add or edit team', path: '/users', color: 'from-blue-500 to-blue-600' },
-              { icon: CreditCard, label: 'Subscription', desc: 'Manage your plan', path: '/subscription', color: 'from-green-500 to-green-600' },
-              { icon: BarChart3, label: 'Analytics', desc: 'View insights', path: '/analytics', color: 'from-purple-500 to-purple-600' },
-              { icon: Activity, label: 'Activity Log', desc: 'Track all actions', path: '/activity', color: 'from-orange-500 to-orange-600' }
+              { icon: Users, label: 'Manage Users', desc: 'Add or edit team', path: '/users', bgClass: 'bg-blue-600' },
+              { icon: CreditCard, label: 'Subscription', desc: 'Manage your plan', path: '/subscription', bgClass: 'bg-green-600' },
+              { icon: BarChart3, label: 'Analytics', desc: 'View insights', path: '/analytics', bgClass: 'bg-indigo-600' },
+              { icon: Activity, label: 'Activity Log', desc: 'Track all actions', path: '/activity', bgClass: 'bg-orange-500' }
             ].map((action, idx) => {
               const Icon = action.icon;
               return (
                 <button
                   key={idx}
                   onClick={() => navigate(action.path)}
-                  className="group p-4 sm:p-5 bg-white dark:bg-gray-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700/50 hover:border-purple-300 dark:hover:border-purple-600/50 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 text-left"
+                  aria-label={action.label}
+                  title={action.label}
+                  className="group p-4 sm:p-5 bg-white dark:bg-gray-800/50 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-sm hover:shadow-md transition transform hover:-translate-y-1 active:translate-y-0 text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus-ring"
                 >
-                  <div className={`inline-flex p-2 sm:p-3 rounded-lg bg-gradient-to-br ${action.color} text-white mb-3 group-hover:scale-110 transition transform`}>
+                  <div className={`inline-flex p-2 sm:p-3 rounded-lg ${action.bgClass} text-white mb-3 group-hover:opacity-90 transition-opacity`}>
                     <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">{action.label}</div>
@@ -128,14 +130,14 @@ const DashboardPage = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
           {[
-            { icon: '🏢', label: 'Company', value: user.tenantName, color: 'from-blue-500/20 to-blue-600/20 dark:from-blue-900/40 dark:to-blue-800/40' },
-            { icon: '💳', label: 'Current Plan', value: subscription?.plan || 'FREE', color: 'from-green-500/20 to-green-600/20 dark:from-green-900/40 dark:to-green-800/40' },
-            { icon: '👥', label: 'Total Users', value: users.length, color: 'from-blue-500/20 to-blue-600/20 dark:from-blue-900/40 dark:to-blue-800/40' },
-            { icon: '📊', label: 'API Calls', value: subscription?.currentApiCalls || 0, color: 'from-purple-500/20 to-purple-600/20 dark:from-purple-900/40 dark:to-purple-800/40' }
+            { icon: Users, label: 'Company', value: user.tenantName },
+            { icon: CreditCard, label: 'Current Plan', value: subscription?.plan || 'FREE' },
+            { icon: Users, label: 'Total Users', value: users.length },
+            { icon: BarChart3, label: 'API Calls', value: subscription?.currentApiCalls || 0 }
           ].map((stat, idx) => (
             <div
               key={idx}
-              className={`bg-gradient-to-br ${stat.color} backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}
+              className="bg-white dark:bg-gray-800/60 border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-md transition transform hover:scale-105 fade-up"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -146,18 +148,23 @@ const DashboardPage = () => {
                     {stat.value}
                   </p>
                 </div>
-                <span className="text-3xl sm:text-4xl">{stat.icon}</span>
+                <span className="text-2xl sm:text-3xl text-gray-500 dark:text-gray-400">
+                  {(() => {
+                    const Icon = stat.icon;
+                    return <Icon className="w-6 h-6" />;
+                  })()}
+                </span>
               </div>
             </div>
           ))}
         </div>
 
         {/* Subscription Details Card */}
-        <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl sm:rounded-2xl shadow-xl mb-8 overflow-hidden hover:shadow-2xl transition-shadow">
-          <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-gray-200 dark:border-gray-700/50 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20">
+        <div className="bg-white dark:bg-gray-900 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl sm:rounded-2xl shadow-sm mb-8 overflow-hidden hover:shadow-md transition-shadow">
+          <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-gray-200 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-900/40">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
+                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 dark:text-indigo-400" />
                 Subscription Details
               </h3>
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold transition-all ${
@@ -194,7 +201,7 @@ const DashboardPage = () => {
             <div className="pt-6 border-t border-gray-200 dark:border-gray-700/50">
               <button
                 onClick={() => navigate('/subscription')}
-                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-bold rounded-lg transition transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition transform hover:scale-[1.03] active:scale-95 flex items-center justify-center gap-2 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus-ring"
               >
                 <span>Upgrade Plan</span>
                 <ArrowRight className="w-4 h-4" />
@@ -205,11 +212,11 @@ const DashboardPage = () => {
 
         {/* Users Table */}
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-shadow">
-          <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-200 dark:border-gray-700/50 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+          <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-200 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
             <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">👥 Team Members</h3>
             <button
               onClick={() => navigate('/users')}
-              className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold rounded-lg transition transform hover:scale-105 active:scale-95 text-sm"
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition transform hover:scale-[1.03] active:scale-95 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus-ring"
             >
               Manage Users
             </button>

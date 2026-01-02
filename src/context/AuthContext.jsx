@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
         const subdomain = localStorage.getItem('subdomain');
 
         if (token && userId && tenantId) {
-          // Reconstruct user object
           const currentUser = {
             token,
             userId: parseInt(userId),
@@ -52,36 +51,39 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const login = async (email, password) => {
-    const user = await authService.login(email, password);
+  const login = async (email, password, twoFactorCode = null) => {
+    const response = await authService.login(email, password, twoFactorCode);
+    
+    // If 2FA is required, return without setting user
+    if (response.requiresTwoFactor) {
+      return response;
+    }
 
-    // store fields individually
-    localStorage.setItem("token", user.token);
-    localStorage.setItem("userId", user.userId);
-    localStorage.setItem("email", user.email);
-    localStorage.setItem("firstName", user.firstName);
-    localStorage.setItem("lastName", user.lastName);
-    localStorage.setItem("role", user.role);
-    localStorage.setItem("tenantId", user.tenantId);
-    localStorage.setItem("tenantName", user.tenantName || "");
-    localStorage.setItem("subdomain", user.subdomain || "");
-
-    // also store a JSON snapshot (if some parts of app expect it)
-    localStorage.setItem("user", JSON.stringify(user));
+    // Store user data
+    localStorage.setItem("token", response.token);
+    localStorage.setItem("userId", response.userId);
+    localStorage.setItem("email", response.email);
+    localStorage.setItem("firstName", response.firstName);
+    localStorage.setItem("lastName", response.lastName);
+    localStorage.setItem("role", response.role);
+    localStorage.setItem("tenantId", response.tenantId);
+    localStorage.setItem("tenantName", response.tenantName || "");
+    localStorage.setItem("subdomain", response.subdomain || "");
+    localStorage.setItem("user", JSON.stringify(response));
 
     setUser({
-      token: user.token,
-      userId: user.userId,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      tenantId: user.tenantId,
-      tenantName: user.tenantName || "",
-      subdomain: user.subdomain || ""
+      token: response.token,
+      userId: response.userId,
+      email: response.email,
+      firstName: response.firstName,
+      lastName: response.lastName,
+      role: response.role,
+      tenantId: response.tenantId,
+      tenantName: response.tenantName || "",
+      subdomain: response.subdomain || ""
     });
 
-    return user;
+    return response;
   };
 
   const register = async (formData) => {
@@ -103,23 +105,10 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/login';
   };
 
-  /**
-   * updateUser
-   * - merges newData into current user state
-   * - writes individual keys into localStorage so other parts of app (init code)
-   *   that read token / tenantName / tenantId etc will pick up the new values
-   *
-   * Usage examples:
-   *   updateUser({ tenantName: "New Co" });
-   *   updateUser({ firstName: "John", lastName: "Doe" });
-   */
   const updateUser = (newData) => {
     const updatedUser = { ...user, ...newData };
-
-    // Update react state
     setUser(updatedUser);
 
-    // Sync individual localStorage items (so init and other code reads them)
     try {
       if (updatedUser.token !== undefined) {
         localStorage.setItem("token", updatedUser.token || "");
@@ -149,43 +138,22 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem("subdomain", updatedUser.subdomain || "");
       }
 
-      // keep JSON snapshot too (useful if other code reads `user` key)
       localStorage.setItem("user", JSON.stringify(updatedUser));
     } catch (err) {
       console.error('Failed to sync user to localStorage', err);
     }
   };
 
-  //    const refreshTenantData = async () => {
-  //   if (user?.tenantId) {
-  //     try {
-  //       const response = await api.get(`/tenants/${user.tenantId}`);
-  //       const updatedUser = {
-  //         ...user,
-  //         tenantName: response.data.name,
-  //         subdomain: response.data.subdomain
-  //       };
-  //       setUser(updatedUser);
-  //       localStorage.setItem('user', JSON.stringify(updatedUser));
-  //       console.log('✅ Tenant data refreshed:', response.data.name);
-  //     } catch (error) {
-  //       console.error('Failed to refresh tenant data:', error);
-  //     }
-  //   }
-  // };
-
   const value = {
     user,
     login,
     register,
     logout,
-    // refreshTenantData,
     updateUser,
     isAuthenticated: !!user && !!user.token,
     loading,
   };
 
-  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
